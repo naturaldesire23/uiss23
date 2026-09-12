@@ -5,10 +5,13 @@
 --                       keybind overlay styling
 --  Fixes:
 --   * Interface tab actually built
---   * Minimize works — visible bar, clickable restore, button survives
+--   * Minimize works — IceLib-exact: swap gradient, shrink container only.
+--     No Handler hide, no Logo/ClientName reposition, no delay.
+--     Minimize button inside Handler (survives via ClipsDescendants clip).
+--   * Toggle ON = light track + dark knob (Theme.Accent / Theme.Group)
+--   * Interface tab sections 355px tall + 70px bottom padding (no clipping)
 --   * Keybind overlay: translucent dark, module-state aware colors
 --   * Ailon gradients on module titles / descriptions
---   * Bottom padding so keybinds list doesn't clip in Interface tab
 --   * Unload button bottom-left
 -- ═══════════════════════════════════════════════════════════════
 
@@ -126,12 +129,10 @@ for k, v in pairs(DefaultTheme) do
     Theme[k] = typeof(v) == "Color3" and Color3.new(v.R, v.G, v.B) or v
 end
 
--- Ailon font constants
 local FONT_MAIN    = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
 local FONT_REGULAR = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.Regular,  Enum.FontStyle.Normal)
 local FONT_BOLD    = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.Bold,     Enum.FontStyle.Normal)
 
--- Ailon gradient helpers
 local function applyAilonTextGradient(textLabel)
     local g = Instance.new('UIGradient')
     g.Color = ColorSequence.new{
@@ -551,21 +552,21 @@ function Library:create_ui()
     Sections.Name = 'Sections'
     Sections.Parent = Handler
 
-    -- Minimize button (inside Container, survives minimize)
+    -- Minimize button — inside Handler, IceLib exact position
     local Minimize = Instance.new('TextButton')
-    Minimize.FontFace = FONT_BOLD
-    Minimize.TextColor3 = Color3.fromRGB(255, 255, 255)
-    Minimize.Text = '—'
+    Minimize.FontFace = FONT_MAIN
+    Minimize.TextColor3 = Color3.fromRGB(0, 0, 0)
+    Minimize.BorderColor3 = Color3.fromRGB(0, 0, 0)
+    Minimize.Text = ''
     Minimize.AutoButtonColor = false
     Minimize.Name = 'Minimize'
     Minimize.BackgroundTransparency = 1
-    Minimize.Position = UDim2.new(0, 26, 0, 16)
-    Minimize.Size = UDim2.new(0, 20, 0, 20)
+    Minimize.Position = UDim2.new(0.020057305693626404, 0, 0.02922755666077137, 0)
+    Minimize.Size = UDim2.new(0, 24, 0, 24)
     Minimize.BorderSizePixel = 0
-    Minimize.TextSize = 16
+    Minimize.TextSize = 14
     Minimize.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    Minimize.ZIndex = 10
-    Minimize.Parent = Container
+    Minimize.Parent = Handler
 
     local Search = Instance.new('ImageButton')
     Search.Name = 'Search'
@@ -625,48 +626,32 @@ function Library:create_ui()
     Connections['container_input_began'] = Container.InputBegan:Connect(on_drag)
     Connections['input_changed'] = UserInputService.InputChanged:Connect(drag)
 
-    -- Whole-container click to restore when minimized
-    Connections['container_restore_click'] = Container.InputBegan:Connect(function(input)
-        if Library._ui_open then return end
-        if input.UserInputType ~= Enum.UserInputType.MouseButton1
-           and input.UserInputType ~= Enum.UserInputType.Touch then return end
-        Library._ui_open = true
-        if Library._config._flags['UI_Gui_Visible'] then
-            self:set_gui_visibility(true)
-        else
-            self:change_visiblity(true)
-        end
-    end)
-
     self:removed(function()
         self._ui = nil
         Connections:disconnect_all()
     end)
 
     -- ═══════════════════════════════════════════════════════════
-    --  Minimize / Restore (fixed)
+    --  Minimize / Restore — IceLib exact behavior:
+    --  Only swap the gradient and shrink/tween the Container size.
+    --  Handler, Logo, ClientName, Minimize stay inside Handler and
+    --  are visible via ClipsDescendants (Handler is 752x479; the
+    --  shrunken 104x52 Container clips it so only top-left shows).
     -- ═══════════════════════════════════════════════════════════
     function self:change_visiblity(state)
         Library._ui_open = state
         ShadowHolder.Visible = state
-        local op = (Library._config._flags['UI_Container_Transparency'] or 0) / 100
-
         if state then
-            Handler.Visible = true
             ContainerGradient.Enabled = true
             ContainerGradient.Color = Theme.Gradient
             ContainerGradient.Rotation = 90
             Container.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-            Container.BackgroundTransparency = op
             Logo.Position = UDim2.new(0, 14, 0, 26)
             ClientName.Position = UDim2.new(0, 43, 0, 26)
-            Minimize.Position = UDim2.new(0, 26, 0, 16)
 
-            pcall(function()
-                TweenService:Create(Container, TweenInfo.new(0.28, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-                    Size = UDim2.fromOffset(752, 479)
-                }):Play()
-            end)
+            TweenService:Create(Container, TweenInfo.new(0.28, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+                Size = UDim2.fromOffset(752, 479)
+            }):Play()
         else
             ContainerGradient.Enabled = true
             ContainerGradient.Color = ColorSequence.new{
@@ -675,22 +660,12 @@ function Library:create_ui()
             }
             ContainerGradient.Rotation = 90
             Container.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-            Container.BackgroundTransparency = op
             Logo.Position = UDim2.new(0, 10, 0, 26)
             ClientName.Position = UDim2.new(0, 39, 0, 26)
-            Minimize.Position = UDim2.new(0, 22, 0, 16)
 
-            pcall(function()
-                TweenService:Create(Container, TweenInfo.new(0.28, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-                    Size = UDim2.fromOffset(104.5, 52)
-                }):Play()
-            end)
-
-            task.delay(0.28, function()
-                if not Library._ui_open and self._ui then
-                    Handler.Visible = false
-                end
-            end)
+            TweenService:Create(Container, TweenInfo.new(0.28, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+                Size = UDim2.fromOffset(104.5, 52)
+            }):Play()
         end
     end
 
@@ -698,8 +673,6 @@ function Library:create_ui()
         if not self._ui then return end
         if state then
             self._ui.Enabled = true
-            Handler.Visible = true
-            ShadowHolder.Visible = true
             Container.Size = UDim2.fromOffset(0, 0)
             TweenService:Create(Container, TweenInfo.new(0.35, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out), {
                 Size = UDim2.fromOffset(752, 479)
@@ -711,8 +684,6 @@ function Library:create_ui()
             t:Play()
             t.Completed:Once(function()
                 self._ui.Enabled = false
-                Handler.Visible = false
-                ShadowHolder.Visible = false
             end)
         end
     end
@@ -868,7 +839,7 @@ function Library:create_ui()
         LeftSection.AutomaticCanvasSize = Enum.AutomaticSize.XY
         LeftSection.ScrollBarThickness = 0
         LeftSection.ScrollBarImageTransparency = 1
-        LeftSection.Size = UDim2.new(0, 243, 0, 370)
+        LeftSection.Size = UDim2.new(0, 243, 0, 355)
         LeftSection.Selectable = false
         LeftSection.AnchorPoint = Vector2.new(0, 0)
         LeftSection.BackgroundTransparency = 1
@@ -887,14 +858,14 @@ function Library:create_ui()
         UIListLayout_L.Parent = LeftSection
         local UIPadding_L = Instance.new('UIPadding')
         UIPadding_L.PaddingTop = UDim.new(0, 1)
-        UIPadding_L.PaddingBottom = UDim.new(0, 40)
+        UIPadding_L.PaddingBottom = UDim.new(0, 70)
         UIPadding_L.Parent = LeftSection
 
         local RightSection = Instance.new('ScrollingFrame')
         RightSection.Name = 'RightSection'
         RightSection.AutomaticCanvasSize = Enum.AutomaticSize.XY
         RightSection.ScrollBarThickness = 0
-        RightSection.Size = UDim2.new(0, 243, 0, 370)
+        RightSection.Size = UDim2.new(0, 243, 0, 355)
         RightSection.Selectable = false
         RightSection.AnchorPoint = Vector2.new(0, 0)
         RightSection.ScrollBarImageTransparency = 1
@@ -915,7 +886,7 @@ function Library:create_ui()
 
         local UIPadding_R = Instance.new('UIPadding')
         UIPadding_R.PaddingTop = UDim.new(0, 1)
-        UIPadding_R.PaddingBottom = UDim.new(0, 40)
+        UIPadding_R.PaddingBottom = UDim.new(0, 70)
         UIPadding_R.Parent = RightSection
 
         self._tab += 1
@@ -1172,6 +1143,10 @@ function Library:create_ui()
             UIListLayout_Opts.SortOrder = Enum.SortOrder.LayoutOrder
             UIListLayout_Opts.Parent = Options
 
+            -- ═══════════════════════════════════════════════════════
+            --  change_state — Toggle ON = light track + dark knob
+            --  (Theme.Accent track / Theme.Group knob) for contrast.
+            -- ═══════════════════════════════════════════════════════
             function ModuleManager:change_state(state)
                 self._state = state
 
@@ -1179,35 +1154,23 @@ function Library:create_ui()
                     TweenService:Create(Module, TweenInfo.new(0.28, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
                         Size = UDim2.fromOffset(241, 93 + self._size + self._multiplier)
                     }):Play()
-                    TweenService:Create(ModuleName, TweenInfo.new(0.28, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-                        TextColor3 = Color3.fromRGB(255, 255, 255)
-                    }):Play()
-                    TweenService:Create(Description, TweenInfo.new(0.28, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-                        TextColor3 = Color3.fromRGB(200, 200, 210)
-                    }):Play()
                     TweenService:Create(Toggle, TweenInfo.new(0.28, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-                        BackgroundColor3 = Color3.fromRGB(160, 160, 160)
+                        BackgroundColor3 = Theme.Accent
                     }):Play()
                     TweenService:Create(Circle, TweenInfo.new(0.28, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-                        BackgroundColor3 = Color3.fromRGB(160, 160, 160),
-                        Position = UDim2.fromScale(0.53, 0.5)
+                        BackgroundColor3 = Theme.Group,
+                        Position = UDim2.new(1, -14, 0.5, 0)
                     }):Play()
                 else
                     TweenService:Create(Module, TweenInfo.new(0.28, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
                         Size = UDim2.fromOffset(241, 93)
                     }):Play()
-                    TweenService:Create(ModuleName, TweenInfo.new(0.28, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-                        TextColor3 = Theme.Text
-                    }):Play()
-                    TweenService:Create(Description, TweenInfo.new(0.28, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-                        TextColor3 = Theme.TextDim
-                    }):Play()
                     TweenService:Create(Toggle, TweenInfo.new(0.28, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-                        BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+                        BackgroundColor3 = Theme.Control
                     }):Play()
                     TweenService:Create(Circle, TweenInfo.new(0.28, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-                        BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-                        Position = UDim2.fromScale(0, 0.5)
+                        BackgroundColor3 = Theme.TextDim,
+                        Position = UDim2.new(0, 2, 0.5, 0)
                     }):Play()
                 end
 
@@ -1251,13 +1214,13 @@ function Library:create_ui()
                 ModuleManager._state = Library._config._flags[settings.flag]
                 if settings.callback then settings.callback(ModuleManager._state) end
                 if ModuleManager._state then
-                    Toggle.BackgroundColor3 = Color3.fromRGB(160, 160, 160)
-                    Circle.BackgroundColor3 = Color3.fromRGB(160, 160, 160)
-                    Circle.Position = UDim2.fromScale(0.53, 0.5)
+                    Toggle.BackgroundColor3 = Theme.Accent
+                    Circle.BackgroundColor3 = Theme.Group
+                    Circle.Position = UDim2.new(1, -14, 0.5, 0)
                 else
-                    Toggle.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-                    Circle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-                    Circle.Position = UDim2.fromScale(0, 0.5)
+                    Toggle.BackgroundColor3 = Theme.Control
+                    Circle.BackgroundColor3 = Theme.TextDim
+                    Circle.Position = UDim2.new(0, 2, 0.5, 0)
                 end
             end
 
@@ -1344,7 +1307,6 @@ function Library:create_ui()
                 ModuleManager:change_state(not ModuleManager._state)
             end)
 
-            -- Checkbox (Ailon style)
             function ModuleManager:create_checkbox(s)
                 LayoutOrderModule = LayoutOrderModule + 1
                 local CheckboxManager = { _state = false }
@@ -1683,7 +1645,6 @@ function Library:create_ui()
                 end)
             end
 
-            -- Slider (Ailon style)
             function ModuleManager:create_slider(s)
                 LayoutOrderModule = LayoutOrderModule + 1
                 local SliderManager = {}
@@ -2402,7 +2363,7 @@ function Library:create_ui()
         for _, element in ipairs(Library._elements) do
             if element.tKey == key then
                 if element.stateKey ~= nil then
-                    -- skip state-driven elements
+                    -- skip
                 else
                     pcall(function() element.obj[element.prop] = color end)
                 end
@@ -2538,7 +2499,7 @@ function Library:create_ui()
             Reset.MouseButton1Click:Connect(on_click)
         end
 
-        -- Configurations (RIGHT)
+        -- Configurations
         local config_module = InterfaceTab:create_module({
             title = 'Configurations',
             flag = 'UI_Config_System',
@@ -2681,7 +2642,7 @@ function Library:create_ui()
             end
         })
 
-        -- Appearance (LEFT)
+        -- Appearance
         local color_module = InterfaceTab:create_module({
             title = 'Appearance',
             flag = 'Gui_Colors',
@@ -3021,7 +2982,7 @@ function Library:create_ui()
             end
         end
 
-        -- Background (RIGHT)
+        -- Background
         local image_module = InterfaceTab:create_module({
             title = 'Background',
             flag = 'Background_Image',
@@ -3159,7 +3120,7 @@ function Library:create_ui()
         set_background_image(Background_Image_Id)
         set_module_transparency((Library._config._flags['Background_Module_Transparency'] or 0) / 100)
 
-        -- UI Transparency (LEFT)
+        -- UI Transparency
         local ui_trans_module = InterfaceTab:create_module({
             title = 'UI Transparency',
             flag = 'UI_Transparency_Module',
@@ -3182,7 +3143,7 @@ function Library:create_ui()
             end,
         })
 
-        -- Settings (LEFT)
+        -- Settings
         local settings_module = InterfaceTab:create_module({
             title = 'Settings',
             flag = 'UI_Settings',
@@ -3197,7 +3158,7 @@ function Library:create_ui()
             callback = function(state) end,
         })
 
-        -- Minimize Keybind (LEFT)
+        -- Minimize Keybind
         local min_kb_module = InterfaceTab:create_module({
             title = 'Minimize Keybind',
             flag = 'UI_Minimize_Key',
@@ -3211,7 +3172,7 @@ function Library:create_ui()
             flag = 'Minimize_Keybind',
         })
 
-        -- Notifications (RIGHT)
+        -- Notifications
         local notif_module = InterfaceTab:create_module({
             title = 'Notifications',
             flag = 'UI_Notifications',
@@ -3245,9 +3206,7 @@ function Library:create_ui()
             end,
         })
 
-        -- ══════════════════════════════════════════════════════
-        --  OVERLAYS
-        -- ══════════════════════════════════════════════════════
+        -- Overlays
         local StatsOverlayState = {samples={}, maxSamples=24, ping=0, fps=0}
 
         local OverlayGui = Instance.new("ScreenGui")
@@ -3664,7 +3623,7 @@ function Library:create_ui()
         end
     end
 
-    -- Unload button (bottom-left of Handler)
+    -- Unload button
     local UnloadBtn = Instance.new('TextButton')
     UnloadBtn.Name = 'UnloadBtn'
     UnloadBtn.Text = 'Unload'
