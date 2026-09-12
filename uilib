@@ -1,17 +1,18 @@
 -- ═══════════════════════════════════════════════════════════════
 --  Xinve UI — merged lib
---  Base: Fallen (original layout)
---  Overlays: IceLib (FPS/Ping) + Ailon-styled Keybind List
+--  Base: Fallen
+--  Overlays: IceLib (FPS/Ping) + Ailon-style Keybind List
+--
 --  This build:
---   * Module-level "..." binds via Header TextButton child (IceLib)
---   * Sub-function "..." (checkbox) now binds on LEFT CLICK and is
---     gated on its parent module state — won't fire while module off
---   * URL tab icons via resolve_image()
---   * Container gradient uses Theme.Gradient — Appearance tab works
---   * Harmonized gradient palette (no teal/blue mismatch)
---   * Ailon font transparency on module title/desc
---   * Brighter inputs, tight section padding, IceLib minimize
---   * Interface tab built, Unload button
+--   * Library.new({ name, logo, namespace }) — nothing hardcoded
+--   * Library.SetBackgroundPresets({ ['Label'] = url, ... }) — example-defined
+--   * Keybind list rebuilds when key text changes (not just count)
+--   * Keybind list styled purple-dark, half-transparent
+--   * Module keybind_row gated on parent module state
+--   * Sub-function bind gated on parent module state
+--   * Toggle colour exposed as Appearance target ("Toggle")
+--   * Toggles default to soft gray, not stark white, on first run
+--   * URL icons for tabs, modules, background, logo
 -- ═══════════════════════════════════════════════════════════════
 
 local UserInputService = cloneref and cloneref(game:GetService('UserInputService')) or game:GetService('UserInputService')
@@ -29,6 +30,18 @@ local Workspace        = cloneref and cloneref(game:GetService('Workspace'))    
 local mouse = Players.LocalPlayer:GetMouse()
 local LocalPlayer = Players.LocalPlayer
 
+-- ── Namespace (can be overridden via Library.new({ namespace = ... }))
+local NAMESPACE = "Xinve"
+
+local function ensureFolders()
+    if not isfolder(NAMESPACE) then makefolder(NAMESPACE) end
+    if not isfolder(NAMESPACE.."/Configs") then makefolder(NAMESPACE.."/Configs") end
+    if not isfolder(NAMESPACE.."/profiles") then makefolder(NAMESPACE.."/profiles") end
+    if not isfolder(NAMESPACE.."/Backgrounds") then makefolder(NAMESPACE.."/Backgrounds") end
+    if not isfolder(NAMESPACE.."/Icons") then makefolder(NAMESPACE.."/Icons") end
+end
+ensureFolders()
+
 local old_Xinve = CoreGui:FindFirstChild('Xinve')
 if old_Xinve then Debris:AddItem(old_Xinve, 0) end
 
@@ -38,12 +51,6 @@ pcall(function()
         getgenv()._Xinve_Cleanup = nil
     end
 end)
-
-if not isfolder("Xinve") then makefolder("Xinve") end
-if not isfolder("Xinve/Configs") then makefolder("Xinve/Configs") end
-if not isfolder("Xinve/profiles") then makefolder("Xinve/profiles") end
-if not isfolder("Xinve/Backgrounds") then makefolder("Xinve/Backgrounds") end
-if not isfolder("Xinve/Icons") then makefolder("Xinve/Icons") end
 
 local function convertStringToTable(inputString)
     local result = {}
@@ -76,17 +83,17 @@ local Config = setmetatable({
     save = function(self, file_name, config)
         local success, result = pcall(function()
             local flags = HttpService:JSONEncode(config)
-            writefile('Xinve/'..file_name..'.json', flags)
+            writefile(NAMESPACE..'/'..file_name..'.json', flags)
         end)
         if not success then warn('failed to save config', result) end
     end,
     load = function(self, file_name, config)
         local success, result = pcall(function()
-            if not isfile('Xinve/'..file_name..'.json') then
+            if not isfile(NAMESPACE..'/'..file_name..'.json') then
                 self:save(file_name, config)
                 return
             end
-            local flags = readfile('Xinve/'..file_name..'.json')
+            local flags = readfile(NAMESPACE..'/'..file_name..'.json')
             if not flags then
                 self:save(file_name, config)
                 return
@@ -112,6 +119,7 @@ local DefaultTheme = {
     TextDim      = Color3.fromRGB(142, 142, 151),
     TextSoft     = Color3.fromRGB(195, 195, 202),
     Accent       = Color3.fromRGB(224, 224, 224),
+    Toggle       = Color3.fromRGB(150, 150, 158),   -- ← toggle track when ON
     Gradient = ColorSequence.new{
         ColorSequenceKeypoint.new(0.00, Color3.fromRGB(92, 92, 98)),
         ColorSequenceKeypoint.new(0.34, Color3.fromRGB(20, 20, 22)),
@@ -134,7 +142,7 @@ local FONT_REGULAR = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.F
 local FONT_BOLD    = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.Bold,     Enum.FontStyle.Normal)
 
 local function resolve_image(source, folder)
-    folder = folder or 'Xinve/Icons'
+    folder = folder or (NAMESPACE..'/Icons')
     if source == nil or source == '' then return '' end
     if source:match('^%d+$')      then return 'rbxassetid://'..source end
     if source:match('^rbx%a+://') then return source end
@@ -173,7 +181,7 @@ local function applyAilonModuleGradient(frame)
 end
 
 local Library = {
-    _config = Config:load(game.GameId, { _flags = {}, _keybinds = {} }),
+    _config = nil,   -- populated lazily on Library.new()
     _choosing_keybind = false,
     _device = nil,
     _ui_open = true,
@@ -187,19 +195,57 @@ local Library = {
     _elements = {},
     _notif_side = "Right",
     _notif_opacity = 0.0,
-    _keybind_list = {}
+    _keybind_list = {},
+
+    -- Options set by Library.new({...})
+    _clientName = "Xinve",
+    _clientLogo = "rbxassetid://119051552929078",
+
+    -- Presets set by Library.SetBackgroundPresets({...})
+    _backgroundPresets = {},
+    _presetOptions = { 'None' }
 }
 Library.__index = Library
 Library.Connections = Connections
 
-function Library.new()
+function Library.SetBackgroundPresets(presets)
+    Library._backgroundPresets = presets or {}
+    local opts = { 'None' }
+    for name, _ in pairs(Library._backgroundPresets) do
+        table.insert(opts, name)
+    end
+    table.sort(opts, function(a, b)
+        if a == 'None' then return true end
+        if b == 'None' then return false end
+        return a < b
+    end)
+    Library._presetOptions = opts
+end
+
+function Library.new(opts)
+    opts = opts or {}
+    local name = opts.name or "Xinve"
+    local logo = opts.logo or "rbxassetid://119051552929078"
+
+    if opts.namespace then
+        NAMESPACE = tostring(opts.namespace)
+        ensureFolders()
+    end
+
+    Library._clientName = name
+    Library._clientLogo = logo
+    Library._config = Config:load(game.GameId, { _flags = {}, _keybinds = {} })
+
     local self = setmetatable({ _tab = 0 }, Library)
     self:create_ui()
     return self
 end
 
+-- ═══════════════════════════════════════════════════════════════
+--  Notifications
+-- ═══════════════════════════════════════════════════════════════
 local NotificationHost = Instance.new("ScreenGui")
-NotificationHost.Name = "XinveNotifications"
+NotificationHost.Name = (Library._clientName or "Xinve").."Notifications"
 NotificationHost.ResetOnSpawn = false
 NotificationHost.IgnoreGuiInset = true
 NotificationHost.DisplayOrder = 101
@@ -312,6 +358,7 @@ function Library.SendNotification(settings)
     end)
 end
 
+-- Helpers
 function Library:get_screen_scale()
     local viewport_size_x = Workspace.CurrentCamera.ViewportSize.X
     self._ui_scale = viewport_size_x / 1400
@@ -355,12 +402,12 @@ function Library:rgbToHex(color)
 end
 
 function Library:create_ui()
-    local old_Xinve = CoreGui:FindFirstChild('Xinve')
+    local old_Xinve = CoreGui:FindFirstChild(Library._clientName)
     if old_Xinve then Debris:AddItem(old_Xinve, 0) end
 
     local XinveGui = Instance.new('ScreenGui')
     XinveGui.ResetOnSpawn = false
-    XinveGui.Name = 'Xinve'
+    XinveGui.Name = Library._clientName
     XinveGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     XinveGui.Parent = CoreGui
 
@@ -520,7 +567,7 @@ function Library:create_ui()
     ClientName.TextStrokeTransparency = 1
     ClientName.TextColor3 = Theme.Text
     ClientName.TextTransparency = 0
-    ClientName.Text = 'Xinve'
+    ClientName.Text = Library._clientName
     ClientName.Name = 'ClientName'
     ClientName.Size = UDim2.new(0, 110, 0, 19)
     ClientName.AnchorPoint = Vector2.new(0, 0.5)
@@ -542,7 +589,7 @@ function Library:create_ui()
     Logo.BackgroundTransparency = 1
     Logo.BorderSizePixel = 0
     Logo.BorderColor3 = Color3.fromRGB(0, 0, 0)
-    Logo.Image = 'rbxassetid://119051552929078'
+    Logo.Image = resolve_image(Library._clientLogo, NAMESPACE..'/Icons')
     Logo.ImageColor3 = Color3.fromRGB(255, 255, 255)
     Logo.ImageTransparency = 0
     Logo.ScaleType = Enum.ScaleType.Fit
@@ -828,7 +875,7 @@ function Library:create_ui()
         Icon.BackgroundTransparency = 1
         Icon.BorderSizePixel = 0
         Icon.BorderColor3 = Color3.fromRGB(0, 0, 0)
-        Icon.Image = resolve_image(icon, 'Xinve/Icons')
+        Icon.Image = resolve_image(icon, NAMESPACE..'/Icons')
         Icon.ImageColor3 = idle_color or Theme.TextDim
         Icon:SetAttribute('IdleColor', idle_color or Theme.TextDim)
         Icon:SetAttribute('ActiveColor', active_color or Theme.Text)
@@ -971,7 +1018,7 @@ function Library:create_ui()
                 ModuleName.Text = settings.title or "Module"
             else
                 ModuleName.RichText = true
-                ModuleName.Text = settings.richtext or "<font color='rgb(255,255,255)'>Xinve</font> user"
+                ModuleName.Text = settings.richtext or "<font color='rgb(255,255,255)'>"..Library._clientName.."</font> user"
             end
             ModuleName.Name = 'ModuleName'
             ModuleName.Size = UDim2.new(0, 205, 0, 13)
@@ -1046,7 +1093,7 @@ function Library:create_ui()
 
             local Icon = Instance.new('ImageLabel')
             Icon.Name = 'Icon'
-            Icon.Image = settings.icon or 'rbxassetid://79095934438045'
+            Icon.Image = resolve_image(settings.icon or 'rbxassetid://79095934438045', NAMESPACE..'/Icons')
             Icon.ImageColor3 = Theme.TextSoft
             Icon.ImageTransparency = 0
             Icon.ScaleType = Enum.ScaleType.Fit
@@ -1149,7 +1196,7 @@ function Library:create_ui()
                         Size = UDim2.fromOffset(241, 93 + self._size + self._multiplier)
                     }):Play()
                     TweenService:Create(Toggle, TweenInfo.new(0.28, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-                        BackgroundColor3 = Theme.Accent
+                        BackgroundColor3 = Theme.Toggle
                     }):Play()
                     TweenService:Create(Circle, TweenInfo.new(0.28, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
                         BackgroundColor3 = Theme.Group,
@@ -1208,7 +1255,7 @@ function Library:create_ui()
                 ModuleManager._state = Library._config._flags[settings.flag]
                 if settings.callback then settings.callback(ModuleManager._state) end
                 if ModuleManager._state then
-                    Toggle.BackgroundColor3 = Theme.Accent
+                    Toggle.BackgroundColor3 = Theme.Toggle
                     Circle.BackgroundColor3 = Theme.Group
                     Circle.Position = UDim2.new(1, -14, 0.5, 0)
                 else
@@ -1301,9 +1348,6 @@ function Library:create_ui()
                 ModuleManager:change_state(not ModuleManager._state)
             end)
 
-            -- ═══════════════════════════════════════════════════════
-            --  Checkbox (with real child TextButton pill for binding)
-            -- ═══════════════════════════════════════════════════════
             function ModuleManager:create_checkbox(s)
                 LayoutOrderModule = LayoutOrderModule + 1
                 local CheckboxManager = { _state = false }
@@ -1346,7 +1390,6 @@ function Library:create_ui()
                 TitleLabel.Parent = Checkbox
                 table.insert(Library._elements, {obj = TitleLabel, prop = "TextColor3", tKey = "Text"})
 
-                -- Pill is a TextButton now (child of Checkbox TextButton)
                 local KeybindBox = Instance.new("TextButton")
                 KeybindBox.Name = "KeybindBox"
                 KeybindBox.Size = UDim2.fromOffset(14, 14)
@@ -1402,7 +1445,7 @@ function Library:create_ui()
                 Fill.BorderSizePixel = 0
                 Fill.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
                 Fill.Parent = Box
-                table.insert(Library._elements, {obj = Fill, prop = "BackgroundColor3", tKey = "Accent"})
+                table.insert(Library._elements, {obj = Fill, prop = "BackgroundColor3", tKey = "Toggle"})
 
                 local FillCorner = Instance.new("UICorner")
                 FillCorner.CornerRadius = UDim.new(0, 3)
@@ -1442,7 +1485,6 @@ function Library:create_ui()
                     CheckboxManager:change_state(not CheckboxManager._state)
                 end)
 
-                -- Left-click on the pill to bind
                 KeybindBox.MouseButton1Click:Connect(function()
                     if Library._choosing_keybind then return end
                     Library._choosing_keybind = true
@@ -1471,10 +1513,6 @@ function Library:create_ui()
                             Library._config._keybinds[s.flag] = nil
                             Library._keybind_list[s.flag] = nil
                             Config:save(game.GameId, Library._config)
-                            if Connections[s.flag .. "_keybind"] then
-                                Connections[s.flag .. "_keybind"]:Disconnect()
-                                Connections[s.flag .. "_keybind"] = nil
-                            end
                             if Library._keybind_registry[s.flag] then
                                 Library._keybind_registry[s.flag](nil)
                             end
@@ -1492,7 +1530,6 @@ function Library:create_ui()
                     end)
                 end)
 
-                -- Sub-bind fires ONLY when the parent module is ON
                 Connections[s.flag .. "_keypress"] = UserInputService.InputBegan:Connect(function(input, gameProcessed)
                     if gameProcessed then return end
                     if not ModuleManager._state then return end
@@ -1661,6 +1698,17 @@ function Library:create_ui()
                         end
                         cancel_choose()
                     end)
+                end)
+
+                -- Bind fires ONLY when its parent module is ON
+                Connections[s.flag..'_keypress'] = UserInputService.InputBegan:Connect(function(input, process)
+                    if process then return end
+                    if not ModuleManager._state then return end
+                    if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
+                    local storedKey = Library._config._keybinds[s.flag]
+                    if storedKey and tostring(input.KeyCode) == storedKey then
+                        if s.callback then s.callback() end
+                    end
                 end)
             end
 
@@ -2402,6 +2450,9 @@ function Library:create_ui()
         return Theme[key]
     end
 
+    -- ═══════════════════════════════════════════════════════════
+    --  Interface Tab
+    -- ═══════════════════════════════════════════════════════════
     function self:build_interface_tab()
         local saved_tab = self._tab
         self._tab = 9999
@@ -2411,7 +2462,7 @@ function Library:create_ui()
         local Handler = Container.Handler
 
         local function resolve_background(source)
-            return resolve_image(source, 'Xinve/Backgrounds')
+            return resolve_image(source, NAMESPACE..'/Backgrounds')
         end
 
         local function set_background_image(source)
@@ -2432,15 +2483,6 @@ function Library:create_ui()
                 end
             end
         end
-
-        local Background_Presets = {
-            ['Preset 1']  = 'https://i.pinimg.com/736x/bd/12/a5/bd12a561f083960f6c1382c54f4df234.jpg',
-            ['Preset 2']  = 'https://i.pinimg.com/736x/53/bd/84/53bd848d7ca43b57612117292d7ff979.jpg',
-            ['Preset 3']  = 'https://i.pinimg.com/736x/db/26/c7/db26c713d48342bd15c0ee8f623e19c6.jpg',
-            ['Preset 4']  = 'https://i.pinimg.com/736x/dc/ad/10/dcad1026de88c85a417c6f4dd0b620c8.jpg',
-            ['Preset 5']  = 'https://i.pinimg.com/736x/fe/88/90/fe88905bf7387c8827ffaf4a5aae7068.jpg',
-        }
-        local Preset_Options = { 'None', 'Preset 1', 'Preset 2', 'Preset 3', 'Preset 4', 'Preset 5' }
 
         local function find_module_frame(title)
             for _, object in self._ui:GetDescendants() do
@@ -2503,12 +2545,12 @@ function Library:create_ui()
             callback = function(state) end,
         })
 
-        local _last_profile_path = 'Xinve/last_profile.txt'
+        local _last_profile_path = NAMESPACE..'/last_profile.txt'
 
         local function get_configs()
-            if not isfolder('Xinve/Configs') then makefolder('Xinve/Configs') end
+            if not isfolder(NAMESPACE..'/Configs') then makefolder(NAMESPACE..'/Configs') end
             if not listfiles then return {} end
-            local files = listfiles('Xinve/Configs')
+            local files = listfiles(NAMESPACE..'/Configs')
             local names = {}
             for _, file in ipairs(files) do
                 if file:match('%.json$') then
@@ -2578,7 +2620,7 @@ function Library:create_ui()
         if isfile(_last_profile_path) then
             local last_name = readfile(_last_profile_path):gsub('%s+', '')
             if last_name ~= '' then
-                local path = 'Xinve/Configs/' .. last_name .. '.json'
+                local path = NAMESPACE..'/Configs/' .. last_name .. '.json'
                 if isfile(path) then
                     local ok, result = pcall(function()
                         return HttpService:JSONDecode(readfile(path))
@@ -2598,7 +2640,7 @@ function Library:create_ui()
                     Library.SendNotification({title = 'Config', text = 'Enter a valid name.', duration = 3})
                     return
                 end
-                if not isfolder('Xinve/Configs') then makefolder('Xinve/Configs') end
+                if not isfolder(NAMESPACE..'/Configs') then makefolder(NAMESPACE..'/Configs') end
                 Library._config._flags['Config_Input_Name'] = name
                 Config:save('Configs/'..name, Library._config)
                 config_dropdown:refresh(get_configs())
@@ -2628,7 +2670,7 @@ function Library:create_ui()
             callback = function()
                 local name = Library._config._flags['Config_Saved_List']
                 if typeof(name) ~= 'string' or name == '' then return end
-                local path = 'Xinve/Configs/'..name..'.json'
+                local path = NAMESPACE..'/Configs/'..name..'.json'
                 if isfile(path) then
                     delfile(path)
                     config_dropdown:refresh(get_configs())
@@ -2647,7 +2689,7 @@ function Library:create_ui()
         })
 
         local Color_Module_Frame = find_module_frame('Appearance')
-        local Color_Targets = { 'Background', 'Group', 'Control', 'Accent', 'Text', 'TextDim' }
+        local Color_Targets = { 'Background', 'Group', 'Control', 'Accent', 'Toggle', 'Text', 'TextDim' }
         local Color_Swatches = {}
         local Selected_Color_Target = 'Background'
         local Pointer_Offset = Vector2.zero
@@ -3001,12 +3043,12 @@ function Library:create_ui()
         local preset_dropdown = image_module:create_dropdown({
             title = 'Preset',
             flag = 'Background_Preset',
-            options = Preset_Options,
+            options = Library._presetOptions,
             multi_dropdown = false,
-            maximum_options = 6,
+            maximum_options = 12,
             callback = function(value)
                 local name = (typeof(value) == 'string' and value) or (typeof(value) == 'table' and value.Name)
-                local source = (name and Background_Presets[name]) or ''
+                local source = (name and Library._backgroundPresets[name]) or ''
                 Background_Image_Id = source
                 set_background_image(source)
                 if Asset_Input then Asset_Input.Text = source end
@@ -3205,7 +3247,7 @@ function Library:create_ui()
         local StatsOverlayState = {samples={}, maxSamples=24, ping=0, fps=0}
 
         local OverlayGui = Instance.new("ScreenGui")
-        OverlayGui.Name = "XinveTelemetry"
+        OverlayGui.Name = Library._clientName.."Telemetry"
         OverlayGui.ResetOnSpawn = false
         OverlayGui.IgnoreGuiInset = true
         OverlayGui.DisplayOrder = 99
@@ -3380,9 +3422,9 @@ function Library:create_ui()
             end,
         })
 
-        -- Keybinds List overlay
+        -- Keybinds List (purple-dark half-transparent)
         local KeybindOverlayGui = Instance.new("ScreenGui")
-        KeybindOverlayGui.Name = "XinveKeybinds"
+        KeybindOverlayGui.Name = Library._clientName.."Keybinds"
         KeybindOverlayGui.ResetOnSpawn = false
         KeybindOverlayGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
         KeybindOverlayGui.IgnoreGuiInset = true
@@ -3391,32 +3433,32 @@ function Library:create_ui()
 
         local KeybindFrame = Instance.new("Frame")
         KeybindFrame.Name = "KeybindFrame"
-        KeybindFrame.Size = UDim2.new(0, 210, 0, 38)
-        KeybindFrame.Position = UDim2.new(0, 20, 0.5, -19)
-        KeybindFrame.BackgroundColor3 = Color3.fromRGB(14, 14, 18)
-        KeybindFrame.BackgroundTransparency = 0.15
+        KeybindFrame.Size = UDim2.new(0, 220, 0, 44)
+        KeybindFrame.Position = UDim2.new(0, 20, 0.5, -22)
+        KeybindFrame.BackgroundColor3 = Color3.fromRGB(26, 18, 42)
+        KeybindFrame.BackgroundTransparency = 0.20
         KeybindFrame.BorderSizePixel = 0
         KeybindFrame.ClipsDescendants = true
         KeybindFrame.Parent = KeybindOverlayGui
 
         local KbCorner = Instance.new("UICorner")
-        KbCorner.CornerRadius = UDim.new(0, 10)
+        KbCorner.CornerRadius = UDim.new(0, 12)
         KbCorner.Parent = KeybindFrame
 
         local KbGradient = Instance.new("UIGradient")
         KbGradient.Rotation = 90
         KbGradient.Color = ColorSequence.new{
-            ColorSequenceKeypoint.new(0, Color3.fromRGB(38, 38, 46)),
-            ColorSequenceKeypoint.new(1, Color3.fromRGB(10, 10, 14))
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(58, 40, 88)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(16, 10, 26))
         }
         KbGradient.Transparency = NumberSequence.new{
-            NumberSequenceKeypoint.new(0, 0.35),
-            NumberSequenceKeypoint.new(1, 0.75)
+            NumberSequenceKeypoint.new(0, 0.30),
+            NumberSequenceKeypoint.new(1, 0.72)
         }
         KbGradient.Parent = KeybindFrame
 
         local frameBorder = Instance.new("UIStroke")
-        frameBorder.Color = Color3.fromRGB(90, 90, 100)
+        frameBorder.Color = Color3.fromRGB(110, 80, 160)
         frameBorder.Thickness = 1
         frameBorder.Transparency = 0.55
         frameBorder.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
@@ -3424,22 +3466,22 @@ function Library:create_ui()
 
         local headerFrame = Instance.new("Frame")
         headerFrame.Name = "Header"
-        headerFrame.Size = UDim2.new(1, 0, 0, 34)
+        headerFrame.Size = UDim2.new(1, 0, 0, 36)
         headerFrame.Position = UDim2.new(0, 0, 0, 0)
-        headerFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 26)
-        headerFrame.BackgroundTransparency = 0.25
+        headerFrame.BackgroundColor3 = Color3.fromRGB(36, 24, 58)
+        headerFrame.BackgroundTransparency = 0.30
         headerFrame.BorderSizePixel = 0
         headerFrame.ZIndex = 2
         headerFrame.Parent = KeybindFrame
 
         local HeaderCorner = Instance.new("UICorner")
-        HeaderCorner.CornerRadius = UDim.new(0, 10)
+        HeaderCorner.CornerRadius = UDim.new(0, 12)
         HeaderCorner.Parent = headerFrame
 
         local headerDivider = Instance.new("Frame")
         headerDivider.Size = UDim2.new(1, 0, 0, 1)
         headerDivider.Position = UDim2.new(0, 0, 1, -1)
-        headerDivider.BackgroundColor3 = Color3.fromRGB(70, 70, 80)
+        headerDivider.BackgroundColor3 = Color3.fromRGB(120, 90, 170)
         headerDivider.BackgroundTransparency = 0.5
         headerDivider.BorderSizePixel = 0
         headerDivider.ZIndex = 3
@@ -3450,7 +3492,7 @@ function Library:create_ui()
         keyboardIcon.Position = UDim2.new(0, 12, 0.5, -8)
         keyboardIcon.BackgroundTransparency = 1
         keyboardIcon.Image = "rbxassetid://81598136527047"
-        keyboardIcon.ImageColor3 = Color3.fromRGB(200, 200, 210)
+        keyboardIcon.ImageColor3 = Color3.fromRGB(200, 170, 255)
         keyboardIcon.ZIndex = 3
         keyboardIcon.Parent = headerFrame
 
@@ -3459,7 +3501,7 @@ function Library:create_ui()
         headerLabel.Position = UDim2.new(0, 34, 0, 0)
         headerLabel.BackgroundTransparency = 1
         headerLabel.Text = "KEYBINDS"
-        headerLabel.TextColor3 = Color3.fromRGB(220, 220, 230)
+        headerLabel.TextColor3 = Color3.fromRGB(220, 200, 255)
         headerLabel.TextSize = 11
         headerLabel.FontFace = FONT_BOLD
         headerLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -3486,8 +3528,20 @@ function Library:create_ui()
             end
         end)
 
-        local lastBindCount = -1
+        local lastBindSignature = ""
         local keybindUpdateTimer = 0
+
+        local function computeBindSignature()
+            local parts = {}
+            for flag, title in pairs(Library._keybind_list) do
+                local key = Library._config._keybinds[flag]
+                if key then
+                    table.insert(parts, title.."="..string.gsub(tostring(key), "Enum.KeyCode.", ""))
+                end
+            end
+            table.sort(parts)
+            return table.concat(parts, "|")
+        end
 
         local function RefreshKeybindOverlay()
             for _, child in ipairs(KeybindFrame:GetChildren()) do
@@ -3508,15 +3562,15 @@ function Library:create_ui()
 
             table.sort(validBinds, function(a, b) return a.title < b.title end)
 
-            local yBase = 38
+            local yBase = 44
             for i, bind in ipairs(validBinds) do
                 if i > 1 then
                     local div = Instance.new("Frame")
                     div.Name = "Divider"
                     div.Size = UDim2.new(1, -20, 0, 1)
                     div.Position = UDim2.new(0, 10, 0, yBase)
-                    div.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
-                    div.BackgroundTransparency = 0.6
+                    div.BackgroundColor3 = Color3.fromRGB(90, 65, 140)
+                    div.BackgroundTransparency = 0.55
                     div.BorderSizePixel = 0
                     div.Parent = KeybindFrame
                 end
@@ -3535,7 +3589,7 @@ function Library:create_ui()
                 labelText.Position = UDim2.new(0, 4, 0, 0)
                 labelText.BackgroundTransparency = 1
                 labelText.Text = bind.title
-                labelText.TextColor3 = Color3.fromRGB(170, 170, 180)
+                labelText.TextColor3 = Color3.fromRGB(190, 170, 230)
                 labelText.TextSize = 12
                 labelText.Font = Enum.Font.GothamSemibold
                 labelText.TextXAlignment = Enum.TextXAlignment.Left
@@ -3545,8 +3599,8 @@ function Library:create_ui()
                 keyPill.Name = "KeyPill"
                 keyPill.Size = UDim2.new(0, 40, 0, 18)
                 keyPill.Position = UDim2.new(1, -46, 0.5, -9)
-                keyPill.BackgroundColor3 = Color3.fromRGB(28, 28, 36)
-                keyPill.BackgroundTransparency = 0.2
+                keyPill.BackgroundColor3 = Color3.fromRGB(48, 32, 76)
+                keyPill.BackgroundTransparency = 0.15
                 keyPill.BorderSizePixel = 0
                 keyPill.Parent = row
 
@@ -3555,9 +3609,9 @@ function Library:create_ui()
                 pillCorner.Parent = keyPill
 
                 local pillStroke = Instance.new("UIStroke")
-                pillStroke.Color = Color3.fromRGB(80, 80, 95)
+                pillStroke.Color = Color3.fromRGB(120, 90, 180)
                 pillStroke.Thickness = 1
-                pillStroke.Transparency = 0.4
+                pillStroke.Transparency = 0.35
                 pillStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
                 pillStroke.Parent = keyPill
 
@@ -3566,7 +3620,7 @@ function Library:create_ui()
                 keyText.Size = UDim2.new(1, 0, 1, 0)
                 keyText.BackgroundTransparency = 1
                 keyText.Text = bind.key
-                keyText.TextColor3 = Color3.fromRGB(230, 230, 240)
+                keyText.TextColor3 = Color3.fromRGB(230, 220, 255)
                 keyText.TextSize = 11
                 keyText.Font = Enum.Font.GothamBold
                 keyText.TextXAlignment = Enum.TextXAlignment.Center
@@ -3574,27 +3628,24 @@ function Library:create_ui()
 
                 yBase = yBase + 30
             end
-            KeybindFrame.Size = UDim2.new(0, 210, 0, 38 + (#validBinds * 30))
-            lastBindCount = #validBinds
+            KeybindFrame.Size = UDim2.new(0, 220, 0, 44 + (#validBinds * 30) + 10)
+            lastBindSignature = computeBindSignature()
         end
 
         RunService.RenderStepped:Connect(function(dt)
             if not KeybindOverlayGui.Enabled then return end
             keybindUpdateTimer += dt
-            if keybindUpdateTimer >= 0.2 then
+            if keybindUpdateTimer >= 0.15 then
                 keybindUpdateTimer = 0
-                local currentCount = 0
-                for flag, key in pairs(Library._config._keybinds) do
-                    if Library._keybind_list[flag] then currentCount += 1 end
-                end
-                if currentCount ~= lastBindCount then
+                local sig = computeBindSignature()
+                if sig ~= lastBindSignature then
                     RefreshKeybindOverlay()
                 else
                     for _, row in ipairs(KeybindFrame:GetChildren()) do
                         if row.Name == "Row" then
                             local flag = row:GetAttribute("Flag")
                             local state = Library._config._flags[flag]
-                            local col = state and Color3.fromRGB(230, 230, 240) or Color3.fromRGB(170, 170, 180)
+                            local col = state and Color3.fromRGB(230, 220, 255) or Color3.fromRGB(170, 150, 210)
                             if row:FindFirstChild("Title") then row.Title.TextColor3 = col end
                             local pill = row:FindFirstChild("KeyPill")
                             if pill and pill:FindFirstChild("Key") then pill.Key.TextColor3 = col end
@@ -3618,6 +3669,7 @@ function Library:create_ui()
         end
     end
 
+    -- Unload button
     local UnloadBtn = Instance.new('TextButton')
     UnloadBtn.Name = 'UnloadBtn'
     UnloadBtn.Text = 'Unload'
@@ -3665,11 +3717,12 @@ function Library:create_ui()
         pcall(function() Connections:disconnect_all() end)
         pcall(function() NotificationHost:Destroy() end)
         pcall(function()
+            local n = Library._clientName or "Xinve"
             for _, gui in ipairs(CoreGui:GetChildren()) do
-                if gui.Name == 'Xinve'
-                or gui.Name == 'XinveNotifications'
-                or gui.Name == 'XinveTelemetry'
-                or gui.Name == 'XinveKeybinds' then
+                if gui.Name == n
+                or gui.Name == n..'Notifications'
+                or gui.Name == n..'Telemetry'
+                or gui.Name == n..'Keybinds' then
                     gui:Destroy()
                 end
             end
@@ -3724,15 +3777,15 @@ function Library:SaveConfig()
                 end
             end
             local json = HttpService:JSONEncode(ConfigData)
-            writefile("Xinve/UI_Config.json", json)
+            writefile(NAMESPACE.."/UI_Config.json", json)
         end
     end)
 end
 
 function Library:LoadConfig()
     pcall(function()
-        if isfile and isfile("Xinve/UI_Config.json") then
-            local saved = readfile("Xinve/UI_Config.json")
+        if isfile and isfile(NAMESPACE.."/UI_Config.json") then
+            local saved = readfile(NAMESPACE.."/UI_Config.json")
             if saved then
                 local data = HttpService:JSONDecode(saved)
                 if data and data.Theme then
