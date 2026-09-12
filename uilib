@@ -4,13 +4,13 @@
 --  Borrowed from Ailon: font, slider, checkbox, minimize behavior,
 --                       keybind overlay styling
 --  Fixes:
---   * Interface tab built
---   * Minimize works (IceLib exact)
---   * Toggle ON = Theme.Accent track + Theme.Group knob
---   * Module pill keybinds are bindable (pill is child of Module, not
---     Header; bind listener deferred; writes to _keybind_list so it
---     shows in the Keybinds List overlay)
---   * Module sizes unchanged from original
+--   * Interface tab actually built
+--   * Minimize works — IceLib-exact
+--   * Toggle ON = Theme.Accent track / Theme.Group knob
+--   * Module header pill "..." now bindable — header click ignores pill region
+--   * Keybind overlay Ailon-styled and populated from module pills
+--   * Solid module fonts (no gradient wash on title/description)
+--   * Unload button bottom-left
 -- ═══════════════════════════════════════════════════════════════
 
 local UserInputService = cloneref and cloneref(game:GetService('UserInputService')) or game:GetService('UserInputService')
@@ -130,17 +130,6 @@ end
 local FONT_MAIN    = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
 local FONT_REGULAR = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.Regular,  Enum.FontStyle.Normal)
 local FONT_BOLD    = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.Bold,     Enum.FontStyle.Normal)
-
-local function applyAilonTextGradient(textLabel)
-    local g = Instance.new('UIGradient')
-    g.Color = ColorSequence.new{
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
-        ColorSequenceKeypoint.new(0.7, Color3.fromRGB(155, 155, 155)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(58, 58, 58))
-    }
-    g.Parent = textLabel
-    return g
-end
 
 local function applyAilonModuleGradient(frame)
     local g = Instance.new('UIGradient')
@@ -972,8 +961,6 @@ function Library:create_ui()
             ModuleName.Parent = Header
             table.insert(Library._elements, {obj = ModuleName, prop = "TextColor3", tKey = "Text"})
 
-            applyAilonTextGradient(ModuleName)
-
             local LockIcon = Instance.new('ImageLabel')
             LockIcon.Name = 'LockIcon'
             LockIcon.Image = 'rbxassetid://132906779122559'
@@ -1003,8 +990,6 @@ function Library:create_ui()
             Description.TextSize = 10
             Description.Parent = Header
             table.insert(Library._elements, {obj = Description, prop = "TextColor3", tKey = "TextDim"})
-
-            applyAilonTextGradient(Description)
 
             local Toggle = Instance.new('Frame')
             Toggle.Name = 'Toggle'
@@ -1036,8 +1021,7 @@ function Library:create_ui()
             CircleCorner.CornerRadius = UDim.new(1, 0)
             CircleCorner.Parent = Circle
 
-            -- Keybind pill — parented to Module (NOT Header) so header click
-            -- doesn't eat the pill click, and ZIndex above header visuals.
+            -- Keybind pill (child of Header, but we ignore header clicks landing on it)
             local Keybind = Instance.new('TextButton')
             Keybind.Name = 'Keybind'
             Keybind.AutoButtonColor = false
@@ -1049,7 +1033,7 @@ function Library:create_ui()
             Keybind.BackgroundColor3 = Theme.Control
             Keybind.ZIndex = 8
             Keybind.Active = true
-            Keybind.Parent = Module
+            Keybind.Parent = Header
             table.insert(Library._elements, {obj = Keybind, prop = "BackgroundColor3", tKey = "Control"})
 
             local Icon = Instance.new('ImageLabel')
@@ -1065,6 +1049,8 @@ function Library:create_ui()
             Icon.BorderSizePixel = 0
             Icon.Parent = Header
             table.insert(Library._elements, {obj = Icon, prop = "ImageColor3", tKey = "TextSoft"})
+
+            Keybind.Position = UDim2.new(0, 34, 0, 67)
 
             local KeybindCorner = Instance.new('UICorner')
             KeybindCorner.CornerRadius = UDim.new(0, 2)
@@ -1137,7 +1123,6 @@ function Library:create_ui()
             UIListLayout_Opts.SortOrder = Enum.SortOrder.LayoutOrder
             UIListLayout_Opts.Parent = Options
 
-            -- Toggle ON: light track + dark knob. OFF: dark track + gray knob.
             function ModuleManager:change_state(state)
                 self._state = state
 
@@ -1244,7 +1229,6 @@ function Library:create_ui()
                 end
             end
 
-            -- Bind flow: deferred so header click doesn't eat the pill click.
             Connections[settings.flag..'_input_began'] = Keybind.MouseButton1Click:Connect(function()
                 task.defer(function()
                     if Library._choosing_keybind then return end
@@ -1299,8 +1283,15 @@ function Library:create_ui()
                 end)
             end)
 
+            -- Header click: ignore clicks that land on the keybind pill so the bind flow can run
             Header.MouseButton1Click:Connect(function()
-                -- ignore clicks that land on the pill (pill is in Module coords anyway)
+                local mousePos = UserInputService:GetMouseLocation()
+                local kp = Keybind.AbsolutePosition
+                local ks = Keybind.AbsoluteSize
+                if mousePos.X >= kp.X and mousePos.X <= kp.X + ks.X
+                   and mousePos.Y >= kp.Y and mousePos.Y <= kp.Y + ks.Y then
+                    return
+                end
                 ModuleManager:change_state(not ModuleManager._state)
             end)
 
@@ -2362,6 +2353,7 @@ function Library:create_ui()
         for _, element in ipairs(Library._elements) do
             if element.tKey == key then
                 if element.stateKey ~= nil then
+                    -- skip
                 else
                     pcall(function() element.obj[element.prop] = color end)
                 end
@@ -3382,7 +3374,9 @@ function Library:create_ui()
             end,
         })
 
-        -- Keybinds List overlay
+        -- ══════════════════════════════════════════════════════════
+        --  Keybinds List overlay — Ailon style
+        -- ══════════════════════════════════════════════════════════
         local KeybindOverlayGui = Instance.new("ScreenGui")
         KeybindOverlayGui.Name = "XinveKeybinds"
         KeybindOverlayGui.ResetOnSpawn = false
