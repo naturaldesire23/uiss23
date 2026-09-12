@@ -1,15 +1,18 @@
 -- ═══════════════════════════════════════════════════════════════
 --  Xinve UI — merged lib
 --  Base layout: Xinve (Fallen)
---  Borrowed from Ailon: font, slider, checkbox, minimize behavior,
+--  Borrowed from Ailon: fonts, slider, checkbox, minimize behavior,
 --                       keybind overlay styling
---  Fixes:
---   * Interface tab actually built
---   * Minimize works — IceLib-exact
+--  Fixes in this build:
+--   * URL tab icons (pinimg/imgur/etc) via shared resolve_image()
+--   * Module header "..." pill is bindable (ToggleZone approach)
+--   * Module title 0.2 transparency, description 0.7 (Ailon look)
+--   * Input boxes brighter, taller, better contrast
+--   * No more giant scroll gap (section padding 70 → 20)
+--   * Options PaddingBottom = 12 (module content breathing room)
 --   * Toggle ON = Theme.Accent track / Theme.Group knob
---   * Module header pill "..." now bindable — header click ignores pill region
---   * Keybind overlay Ailon-styled and populated from module pills
---   * Solid module fonts (no gradient wash on title/description)
+--   * Minimize works — IceLib exact
+--   * Interface tab built, keybind overlay Ailon-styled
 --   * Unload button bottom-left
 -- ═══════════════════════════════════════════════════════════════
 
@@ -42,6 +45,7 @@ if not isfolder("Xinve") then makefolder("Xinve") end
 if not isfolder("Xinve/Configs") then makefolder("Xinve/Configs") end
 if not isfolder("Xinve/profiles") then makefolder("Xinve/profiles") end
 if not isfolder("Xinve/Backgrounds") then makefolder("Xinve/Backgrounds") end
+if not isfolder("Xinve/Icons") then makefolder("Xinve/Icons") end
 
 local function convertStringToTable(inputString)
     local result = {}
@@ -103,8 +107,8 @@ local DefaultTheme = {
     Background   = Color3.fromRGB(0, 0, 0),
     Group        = Color3.fromRGB(20, 20, 20),
     GroupStroke  = Color3.fromRGB(45, 45, 45),
-    Control      = Color3.fromRGB(30, 30, 30),
-    ControlHover = Color3.fromRGB(40, 40, 40),
+    Control      = Color3.fromRGB(38, 38, 44),
+    ControlHover = Color3.fromRGB(48, 48, 56),
     Divider      = Color3.fromRGB(35, 35, 35),
     Text         = Color3.fromRGB(238, 238, 242),
     TextDim      = Color3.fromRGB(142, 142, 151),
@@ -130,6 +134,31 @@ end
 local FONT_MAIN    = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
 local FONT_REGULAR = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.Regular,  Enum.FontStyle.Normal)
 local FONT_BOLD    = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.Bold,     Enum.FontStyle.Normal)
+
+-- Shared resolver: rbxassetid / bare ID / local path / http(s) URL
+local function resolve_image(source, folder)
+    folder = folder or 'Xinve/Icons'
+    if source == nil or source == '' then return '' end
+    if source:match('^%d+$')      then return 'rbxassetid://'..source end
+    if source:match('^rbx%a+://') then return source end
+    local Custom_Asset = getcustomasset or getsynasset
+    if not Custom_Asset then return source end
+    if not source:match('^https?://') then
+        return (isfile(source) and Custom_Asset(source)) or source
+    end
+    if not isfolder(folder) then makefolder(folder) end
+    local ext  = source:match('%.(%a%a%a%a?)[%?#]')
+              or source:match('%.(%a%a%a%a?)$')
+              or 'png'
+    local name = source:gsub('%W',''):sub(-48)..'.'..ext
+    local path = folder..'/'..name
+    if not isfile(path) then
+        local ok, body = pcall(game.HttpGet, game, source, true)
+        if not ok or not body then return '' end
+        writefile(path, body)
+    end
+    return Custom_Asset(path)
+end
 
 local function applyAilonModuleGradient(frame)
     local g = Instance.new('UIGradient')
@@ -617,7 +646,6 @@ function Library:create_ui()
         Connections:disconnect_all()
     end)
 
-    -- IceLib-exact minimize
     function self:change_visiblity(state)
         Library._ui_open = state
         ShadowHolder.Visible = state
@@ -805,7 +833,7 @@ function Library:create_ui()
         Icon.BackgroundTransparency = 1
         Icon.BorderSizePixel = 0
         Icon.BorderColor3 = Color3.fromRGB(0, 0, 0)
-        Icon.Image = icon or ''
+        Icon.Image = resolve_image(icon, 'Xinve/Icons')
         Icon.ImageColor3 = idle_color or Theme.TextDim
         Icon:SetAttribute('IdleColor', idle_color or Theme.TextDim)
         Icon:SetAttribute('ActiveColor', active_color or Theme.Text)
@@ -838,7 +866,7 @@ function Library:create_ui()
         UIListLayout_L.Parent = LeftSection
         local UIPadding_L = Instance.new('UIPadding')
         UIPadding_L.PaddingTop = UDim.new(0, 1)
-        UIPadding_L.PaddingBottom = UDim.new(0, 70)
+        UIPadding_L.PaddingBottom = UDim.new(0, 20)
         UIPadding_L.Parent = LeftSection
 
         local RightSection = Instance.new('ScrollingFrame')
@@ -866,7 +894,7 @@ function Library:create_ui()
 
         local UIPadding_R = Instance.new('UIPadding')
         UIPadding_R.PaddingTop = UDim.new(0, 1)
-        UIPadding_R.PaddingBottom = UDim.new(0, 70)
+        UIPadding_R.PaddingBottom = UDim.new(0, 20)
         UIPadding_R.Parent = RightSection
 
         self._tab += 1
@@ -926,24 +954,30 @@ function Library:create_ui()
             UIStroke.Parent = Module
             table.insert(Library._elements, {obj = UIStroke, prop = "Color", tKey = "GroupStroke"})
 
-            local Header = Instance.new('TextButton')
-            Header.FontFace = FONT_MAIN
-            Header.TextColor3 = Color3.fromRGB(0, 0, 0)
-            Header.BorderColor3 = Color3.fromRGB(0, 0, 0)
-            Header.Text = ''
-            Header.AutoButtonColor = false
+            -- Header is a plain Frame now; a ToggleZone behind everything handles clicks
+            local Header = Instance.new('Frame')
             Header.BackgroundTransparency = 1
             Header.Name = 'Header'
             Header.Size = UDim2.new(0, 241, 0, 93)
             Header.BorderSizePixel = 0
-            Header.TextSize = 14
             Header.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
             Header.Parent = Module
+
+            local ToggleZone = Instance.new('TextButton')
+            ToggleZone.Name = 'ToggleZone'
+            ToggleZone.Text = ''
+            ToggleZone.AutoButtonColor = false
+            ToggleZone.BackgroundTransparency = 1
+            ToggleZone.Size = UDim2.new(1, 0, 1, 0)
+            ToggleZone.Position = UDim2.new(0, 0, 0, 0)
+            ToggleZone.BorderSizePixel = 0
+            ToggleZone.ZIndex = 1
+            ToggleZone.Parent = Header
 
             local ModuleName = Instance.new('TextLabel')
             ModuleName.FontFace = FONT_MAIN
             ModuleName.TextColor3 = Theme.Text
-            ModuleName.TextTransparency = 0
+            ModuleName.TextTransparency = 0.2
             if not settings.rich then
                 ModuleName.Text = settings.title or "Module"
             else
@@ -958,6 +992,7 @@ function Library:create_ui()
             ModuleName.TextXAlignment = Enum.TextXAlignment.Left
             ModuleName.BorderSizePixel = 0
             ModuleName.TextSize = 13
+            ModuleName.ZIndex = 2
             ModuleName.Parent = Header
             table.insert(Library._elements, {obj = ModuleName, prop = "TextColor3", tKey = "Text"})
 
@@ -972,13 +1007,14 @@ function Library:create_ui()
             LockIcon.Size = UDim2.fromOffset(23, 23)
             LockIcon.BackgroundTransparency = 1
             LockIcon.BorderSizePixel = 0
+            LockIcon.ZIndex = 2
             LockIcon.Parent = Header
             table.insert(Library._elements, {obj = LockIcon, prop = "ImageColor3", tKey = "TextDim"})
 
             local Description = Instance.new('TextLabel')
             Description.FontFace = FONT_MAIN
             Description.TextColor3 = Theme.TextDim
-            Description.TextTransparency = 0
+            Description.TextTransparency = 0.7
             Description.Text = settings.description or ''
             Description.Name = 'Description'
             Description.Size = UDim2.new(0, 205, 0, 13)
@@ -988,6 +1024,7 @@ function Library:create_ui()
             Description.TextXAlignment = Enum.TextXAlignment.Left
             Description.BorderSizePixel = 0
             Description.TextSize = 10
+            Description.ZIndex = 2
             Description.Parent = Header
             table.insert(Library._elements, {obj = Description, prop = "TextColor3", tKey = "TextDim"})
 
@@ -999,6 +1036,7 @@ function Library:create_ui()
             Toggle.Size = UDim2.new(0, 30, 0, 16)
             Toggle.BorderSizePixel = 0
             Toggle.BackgroundColor3 = Theme.Control
+            Toggle.ZIndex = 2
             Toggle.Parent = Header
             table.insert(Library._elements, {obj = Toggle, prop = "BackgroundColor3", tKey = "Control", stateKey = false})
 
@@ -1014,27 +1052,13 @@ function Library:create_ui()
             Circle.Size = UDim2.new(0, 12, 0, 12)
             Circle.BorderSizePixel = 0
             Circle.BackgroundColor3 = Theme.TextDim
+            Circle.ZIndex = 3
             Circle.Parent = Toggle
             table.insert(Library._elements, {obj = Circle, prop = "BackgroundColor3", tKey = "TextDim", stateKey = false})
 
             local CircleCorner = Instance.new('UICorner')
             CircleCorner.CornerRadius = UDim.new(1, 0)
             CircleCorner.Parent = Circle
-
-            -- Keybind pill (child of Header, but we ignore header clicks landing on it)
-            local Keybind = Instance.new('TextButton')
-            Keybind.Name = 'Keybind'
-            Keybind.AutoButtonColor = false
-            Keybind.Text = ''
-            Keybind.BackgroundTransparency = 0
-            Keybind.Position = UDim2.new(0, 34, 0, 67)
-            Keybind.Size = UDim2.new(0, 38, 0, 16)
-            Keybind.BorderSizePixel = 0
-            Keybind.BackgroundColor3 = Theme.Control
-            Keybind.ZIndex = 8
-            Keybind.Active = true
-            Keybind.Parent = Header
-            table.insert(Library._elements, {obj = Keybind, prop = "BackgroundColor3", tKey = "Control"})
 
             local Icon = Instance.new('ImageLabel')
             Icon.Name = 'Icon'
@@ -1047,10 +1071,23 @@ function Library:create_ui()
             Icon.Size = UDim2.fromOffset(17, 17)
             Icon.BackgroundTransparency = 1
             Icon.BorderSizePixel = 0
+            Icon.ZIndex = 2
             Icon.Parent = Header
             table.insert(Library._elements, {obj = Icon, prop = "ImageColor3", tKey = "TextSoft"})
 
+            local Keybind = Instance.new('TextButton')
+            Keybind.Name = 'Keybind'
+            Keybind.AutoButtonColor = false
+            Keybind.Text = ''
+            Keybind.BackgroundTransparency = 0
             Keybind.Position = UDim2.new(0, 34, 0, 67)
+            Keybind.Size = UDim2.new(0, 38, 0, 16)
+            Keybind.BorderSizePixel = 0
+            Keybind.BackgroundColor3 = Theme.Control
+            Keybind.ZIndex = 10
+            Keybind.Active = true
+            Keybind.Parent = Header
+            table.insert(Library._elements, {obj = Keybind, prop = "BackgroundColor3", tKey = "Control"})
 
             local KeybindCorner = Instance.new('UICorner')
             KeybindCorner.CornerRadius = UDim.new(0, 2)
@@ -1075,7 +1112,7 @@ function Library:create_ui()
             TextLabel.TextYAlignment = Enum.TextYAlignment.Center
             TextLabel.BorderSizePixel = 0
             TextLabel.TextSize = 10
-            TextLabel.ZIndex = 9
+            TextLabel.ZIndex = 11
             TextLabel.Parent = Keybind
             table.insert(Library._elements, {obj = TextLabel, prop = "TextColor3", tKey = "TextSoft"})
 
@@ -1088,6 +1125,7 @@ function Library:create_ui()
             Divider.Size = UDim2.new(0, 241, 0, 1)
             Divider.BorderSizePixel = 0
             Divider.BackgroundColor3 = Theme.Divider
+            Divider.ZIndex = 2
             Divider.Parent = Header
             table.insert(Library._elements, {obj = Divider, prop = "BackgroundColor3", tKey = "Divider"})
 
@@ -1100,6 +1138,7 @@ function Library:create_ui()
             Divider2.Size = UDim2.new(0, 241, 0, 1)
             Divider2.BorderSizePixel = 0
             Divider2.BackgroundColor3 = Theme.Divider
+            Divider2.ZIndex = 2
             Divider2.Parent = Header
             table.insert(Library._elements, {obj = Divider2, prop = "BackgroundColor3", tKey = "Divider"})
 
@@ -1115,6 +1154,7 @@ function Library:create_ui()
 
             local UIPadding = Instance.new('UIPadding')
             UIPadding.PaddingTop = UDim.new(0, 8)
+            UIPadding.PaddingBottom = UDim.new(0, 12)
             UIPadding.Parent = Options
 
             local UIListLayout_Opts = Instance.new('UIListLayout')
@@ -1229,69 +1269,61 @@ function Library:create_ui()
                 end
             end
 
+            -- Pill click → bind flow
             Connections[settings.flag..'_input_began'] = Keybind.MouseButton1Click:Connect(function()
-                task.defer(function()
-                    if Library._choosing_keybind then return end
-                    Library._choosing_keybind = true
-                    TextLabel.Text = '...'
-                    Keybind.BackgroundColor3 = Theme.ControlHover
+                if Library._choosing_keybind then return end
+                Library._choosing_keybind = true
+                TextLabel.Text = '...'
+                Keybind.BackgroundColor3 = Theme.ControlHover
 
-                    local function cancel_choose()
-                        Library._choosing_keybind = false
-                        Keybind.BackgroundColor3 = Theme.Control
-                        if Library._config._keybinds[settings.flag] then
-                            TextLabel.Text = string.gsub(tostring(Library._config._keybinds[settings.flag]), 'Enum.KeyCode.', '')
-                        else
-                            TextLabel.Text = 'None'
-                        end
-                        if Connections['keybind_choose_start'] then
-                            Connections['keybind_choose_start']:Disconnect()
-                            Connections['keybind_choose_start'] = nil
-                        end
+                local function cancel_choose()
+                    Library._choosing_keybind = false
+                    Keybind.BackgroundColor3 = Theme.Control
+                    if Library._config._keybinds[settings.flag] then
+                        TextLabel.Text = string.gsub(tostring(Library._config._keybinds[settings.flag]), 'Enum.KeyCode.', '')
+                    else
+                        TextLabel.Text = 'None'
                     end
+                    if Connections['keybind_choose_start'] then
+                        Connections['keybind_choose_start']:Disconnect()
+                        Connections['keybind_choose_start'] = nil
+                    end
+                end
 
-                    Connections['keybind_choose_start'] = UserInputService.InputBegan:Connect(function(input, process)
-                        if process then return end
-                        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                            local mousePos = UserInputService:GetMouseLocation()
-                            local framePos = Keybind.AbsolutePosition
-                            local frameSize = Keybind.AbsoluteSize
-                            if mousePos.X < framePos.X or mousePos.X > framePos.X + frameSize.X or mousePos.Y < framePos.Y or mousePos.Y > framePos.Y + frameSize.Y then
-                                cancel_choose()
-                                return
-                            end
-                        end
-                        if input.KeyCode == Enum.KeyCode.Unknown then return end
-                        if input.KeyCode == Enum.KeyCode.Backspace then
-                            Library._config._keybinds[settings.flag] = nil
-                            Library._keybind_list[settings.flag] = nil
-                            if Library._keybind_registry[settings.flag] then
-                                Library._keybind_registry[settings.flag](nil)
-                            end
+                Connections['keybind_choose_start'] = UserInputService.InputBegan:Connect(function(input, process)
+                    if process then return end
+                    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                        local mousePos = UserInputService:GetMouseLocation()
+                        local framePos = Keybind.AbsolutePosition
+                        local frameSize = Keybind.AbsoluteSize
+                        if mousePos.X < framePos.X or mousePos.X > framePos.X + frameSize.X or mousePos.Y < framePos.Y or mousePos.Y > framePos.Y + frameSize.Y then
                             cancel_choose()
-                            Config:save(game.GameId, Library._config)
                             return
                         end
-                        Library._config._keybinds[settings.flag] = tostring(input.KeyCode)
-                        Library._keybind_list[settings.flag] = settings.title or "Module"
+                    end
+                    if input.KeyCode == Enum.KeyCode.Unknown then return end
+                    if input.KeyCode == Enum.KeyCode.Backspace then
+                        Library._config._keybinds[settings.flag] = nil
+                        Library._keybind_list[settings.flag] = nil
                         if Library._keybind_registry[settings.flag] then
-                            Library._keybind_registry[settings.flag](tostring(input.KeyCode))
+                            Library._keybind_registry[settings.flag](nil)
                         end
                         cancel_choose()
                         Config:save(game.GameId, Library._config)
-                    end)
+                        return
+                    end
+                    Library._config._keybinds[settings.flag] = tostring(input.KeyCode)
+                    Library._keybind_list[settings.flag] = settings.title or "Module"
+                    if Library._keybind_registry[settings.flag] then
+                        Library._keybind_registry[settings.flag](tostring(input.KeyCode))
+                    end
+                    cancel_choose()
+                    Config:save(game.GameId, Library._config)
                 end)
             end)
 
-            -- Header click: ignore clicks that land on the keybind pill so the bind flow can run
-            Header.MouseButton1Click:Connect(function()
-                local mousePos = UserInputService:GetMouseLocation()
-                local kp = Keybind.AbsolutePosition
-                local ks = Keybind.AbsoluteSize
-                if mousePos.X >= kp.X and mousePos.X <= kp.X + ks.X
-                   and mousePos.Y >= kp.Y and mousePos.Y <= kp.Y + ks.Y then
-                    return
-                end
+            -- Header toggle zone (fires only when pill is NOT clicked, since pill sits at ZIndex 10 on top)
+            ToggleZone.MouseButton1Click:Connect(function()
                 ModuleManager:change_state(not ModuleManager._state)
             end)
 
@@ -1325,7 +1357,7 @@ function Library:create_ui()
                 local TitleLabel = Instance.new("TextLabel")
                 TitleLabel.Name = "TitleLabel"
                 TitleLabel.FontFace = FONT_MAIN
-                TitleLabel.TextSize = 11
+                TitleLabel.TextSize = 12
                 TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
                 TitleLabel.TextTransparency = 0.2
                 TitleLabel.Text = s.title or "Toggle"
@@ -1664,7 +1696,7 @@ function Library:create_ui()
 
                 local TextLabel = Instance.new('TextLabel')
                 TextLabel.FontFace = FONT_MAIN
-                TextLabel.TextSize = 11
+                TextLabel.TextSize = 12
                 TextLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
                 TextLabel.TextTransparency = 0.2
                 TextLabel.Text = s.title
@@ -1745,7 +1777,7 @@ function Library:create_ui()
                 Value.TextXAlignment = Enum.TextXAlignment.Right
                 Value.BorderSizePixel = 0
                 Value.BorderColor3 = Color3.fromRGB(0, 0, 0)
-                Value.TextSize = 10
+                Value.TextSize = 11
                 Value.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
                 Value.Parent = Slider
                 table.insert(Library._elements, {obj = Value, prop = "TextColor3", tKey = "Text"})
@@ -1826,7 +1858,7 @@ function Library:create_ui()
 
                 local Holder = Instance.new('Frame')
                 Holder.Name = 'ButtonHolder'
-                Holder.Size = UDim2.fromOffset(207, 23)
+                Holder.Size = UDim2.fromOffset(207, 25)
                 Holder.BackgroundTransparency = 1
                 Holder.BorderSizePixel = 0
                 Holder.LayoutOrder = LayoutOrderModule
@@ -1836,7 +1868,7 @@ function Library:create_ui()
                 Btn.Name = 'Button'
                 Btn.AnchorPoint = Vector2.new(0, 1)
                 Btn.Position = UDim2.new(0, 0, 1, 0)
-                Btn.Size = UDim2.fromOffset(207, 22)
+                Btn.Size = UDim2.fromOffset(207, 24)
                 Btn.BackgroundColor3 = Theme.Control
                 Btn.BorderSizePixel = 0
                 Btn.FontFace = FONT_MAIN
@@ -1867,7 +1899,7 @@ function Library:create_ui()
                 LayoutOrderModule = LayoutOrderModule + 1
 
                 if self._size == 0 then self._size = 11 end
-                self._size += 29
+                self._size += 31
 
                 if ModuleManager._state then
                     Module.Size = UDim2.fromOffset(241, 93 + self._size + self._multiplier)
@@ -1876,7 +1908,7 @@ function Library:create_ui()
 
                 local Holder = Instance.new('Frame')
                 Holder.Name = 'TextboxHolder'
-                Holder.Size = UDim2.fromOffset(207, 23)
+                Holder.Size = UDim2.fromOffset(207, 25)
                 Holder.BackgroundTransparency = 1
                 Holder.BorderSizePixel = 0
                 Holder.LayoutOrder = LayoutOrderModule
@@ -1886,7 +1918,7 @@ function Library:create_ui()
                 Box.Name = 'TextBox'
                 Box.AnchorPoint = Vector2.new(0, 1)
                 Box.Position = UDim2.new(0, 0, 1, 0)
-                Box.Size = UDim2.fromOffset(207, 22)
+                Box.Size = UDim2.fromOffset(207, 24)
                 Box.BackgroundColor3 = Theme.Control
                 Box.BorderSizePixel = 0
                 Box.FontFace = FONT_MAIN
@@ -1979,7 +2011,7 @@ function Library:create_ui()
 
                 local TextLabel = Instance.new('TextLabel')
                 TextLabel.FontFace = FONT_MAIN
-                TextLabel.TextSize = 11
+                TextLabel.TextSize = 12
                 TextLabel.TextColor3 = Theme.Text
                 TextLabel.TextTransparency = 0.2
                 TextLabel.Text = s.title
@@ -2381,31 +2413,8 @@ function Library:create_ui()
 
         local Handler = Container.Handler
 
-        local Custom_Asset = getcustomasset or getsynasset
-        local Background_Folder = 'Xinve/Backgrounds'
-
-        if Custom_Asset and not isfolder(Background_Folder) then
-            makefolder(Background_Folder)
-        end
-
         local function resolve_background(source)
-            if source == '' then return '' end
-            if source:match('^%d+$') then return 'rbxassetid://'..source end
-            if source:match('^rbx%a+://') then return source end
-            if not Custom_Asset then return '' end
-            if not source:match('^https?://') then
-                return (isfile(source) and Custom_Asset(source)) or ''
-            end
-            local extension = source:match('%.(%a%a%a%a?)[%?#]')
-                       or source:match('%.(%a%a%a%a?)$')
-                       or 'png'
-            local path = Background_Folder..'/'..source:gsub('%W', ''):sub(-48)..'.'..extension
-            if not isfile(path) then
-                local success, body = pcall(game.HttpGet, game, source, true)
-                if not success then return '' end
-                writefile(path, body)
-            end
-            return Custom_Asset(path)
+            return resolve_image(source, 'Xinve/Backgrounds')
         end
 
         local function set_background_image(source)
@@ -2936,8 +2945,7 @@ function Library:create_ui()
 
             build_reset_button(Opts, #Color_Targets + 3, function()
                 close_popup()
-                for target, color in pairs(DefaultTheme) do
-                    if typeof(color) == "Color3" then
+                for target, color in pairs(DefaultTheme) do                    if typeof(color) == "Color3" then
                         self:SetColor(target, color)
                         if Color_Swatches[target] then
                             Color_Swatches[target].BackgroundColor3 = color
@@ -3041,7 +3049,7 @@ function Library:create_ui()
 
             local Row = Instance.new('Frame')
             Row.Name = 'AssetRow'
-            Row.Size = UDim2.fromOffset(207, 24)
+            Row.Size = UDim2.fromOffset(207, 26)
             Row.BackgroundTransparency = 1
             Row.BorderSizePixel = 0
             Row.LayoutOrder = 0
@@ -3051,7 +3059,7 @@ function Library:create_ui()
             Input.Name = 'AssetId'
             Input.AnchorPoint = Vector2.new(0, 0.5)
             Input.Position = UDim2.new(0, 0, 0.5, 0)
-            Input.Size = UDim2.fromOffset(207, 22)
+            Input.Size = UDim2.fromOffset(207, 24)
             Input.BackgroundColor3 = Theme.Control
             Input.BorderSizePixel = 0
             Input.FontFace = FONT_MAIN
@@ -3374,9 +3382,7 @@ function Library:create_ui()
             end,
         })
 
-        -- ══════════════════════════════════════════════════════════
-        --  Keybinds List overlay — Ailon style
-        -- ══════════════════════════════════════════════════════════
+        -- Keybinds List overlay (Ailon style)
         local KeybindOverlayGui = Instance.new("ScreenGui")
         KeybindOverlayGui.Name = "XinveKeybinds"
         KeybindOverlayGui.ResetOnSpawn = false
