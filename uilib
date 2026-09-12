@@ -4,14 +4,13 @@
 --  Borrowed from Ailon: font, slider, checkbox, minimize behavior,
 --                       keybind overlay styling
 --  Fixes:
---   * Minimize works — IceLib exact (swap gradient, shrink Container).
---   * Module pill keybind now bindable (pill is child of Module,
---     not Header; header click ignores pill region; deferred listener)
---   * Toggle ON = Theme.Accent track / Theme.Group knob (contrast)
---   * Interface tab sections 355px tall + 90px bottom padding
---   * Keybind overlay has corner breathing room + footer space
---   * Clean module title/description (no gradient wash)
---   * Unload button bottom-left
+--   * Interface tab built
+--   * Minimize works (IceLib exact)
+--   * Toggle ON = Theme.Accent track + Theme.Group knob
+--   * Module pill keybinds are bindable (pill is child of Module, not
+--     Header; bind listener deferred; writes to _keybind_list so it
+--     shows in the Keybinds List overlay)
+--   * Module sizes unchanged from original
 -- ═══════════════════════════════════════════════════════════════
 
 local UserInputService = cloneref and cloneref(game:GetService('UserInputService')) or game:GetService('UserInputService')
@@ -131,6 +130,17 @@ end
 local FONT_MAIN    = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.SemiBold, Enum.FontStyle.Normal)
 local FONT_REGULAR = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.Regular,  Enum.FontStyle.Normal)
 local FONT_BOLD    = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.Bold,     Enum.FontStyle.Normal)
+
+local function applyAilonTextGradient(textLabel)
+    local g = Instance.new('UIGradient')
+    g.Color = ColorSequence.new{
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+        ColorSequenceKeypoint.new(0.7, Color3.fromRGB(155, 155, 155)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(58, 58, 58))
+    }
+    g.Parent = textLabel
+    return g
+end
 
 local function applyAilonModuleGradient(frame)
     local g = Instance.new('UIGradient')
@@ -540,7 +550,6 @@ function Library:create_ui()
     Sections.Name = 'Sections'
     Sections.Parent = Handler
 
-    -- Minimize button — inside Handler, IceLib position
     local Minimize = Instance.new('TextButton')
     Minimize.FontFace = FONT_MAIN
     Minimize.TextColor3 = Color3.fromRGB(0, 0, 0)
@@ -619,9 +628,7 @@ function Library:create_ui()
         Connections:disconnect_all()
     end)
 
-    -- ═══════════════════════════════════════════════════════════
-    --  Minimize / Restore — IceLib exact behavior.
-    -- ═══════════════════════════════════════════════════════════
+    -- IceLib-exact minimize
     function self:change_visiblity(state)
         Library._ui_open = state
         ShadowHolder.Visible = state
@@ -720,7 +727,8 @@ function Library:create_ui()
                 continue
             end
 
-            if object.BackgroundTransparency ~= 1 then                TweenService:Create(object, TweenInfo.new(0.28, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+            if object.BackgroundTransparency ~= 1 then
+                TweenService:Create(object, TweenInfo.new(0.28, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
                     BackgroundTransparency = 1
                 }):Play()
                 TweenService:Create(object.TextLabel, TweenInfo.new(0.28, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
@@ -841,7 +849,7 @@ function Library:create_ui()
         UIListLayout_L.Parent = LeftSection
         local UIPadding_L = Instance.new('UIPadding')
         UIPadding_L.PaddingTop = UDim.new(0, 1)
-        UIPadding_L.PaddingBottom = UDim.new(0, 90)
+        UIPadding_L.PaddingBottom = UDim.new(0, 70)
         UIPadding_L.Parent = LeftSection
 
         local RightSection = Instance.new('ScrollingFrame')
@@ -869,7 +877,7 @@ function Library:create_ui()
 
         local UIPadding_R = Instance.new('UIPadding')
         UIPadding_R.PaddingTop = UDim.new(0, 1)
-        UIPadding_R.PaddingBottom = UDim.new(0, 90)
+        UIPadding_R.PaddingBottom = UDim.new(0, 70)
         UIPadding_R.Parent = RightSection
 
         self._tab += 1
@@ -964,6 +972,8 @@ function Library:create_ui()
             ModuleName.Parent = Header
             table.insert(Library._elements, {obj = ModuleName, prop = "TextColor3", tKey = "Text"})
 
+            applyAilonTextGradient(ModuleName)
+
             local LockIcon = Instance.new('ImageLabel')
             LockIcon.Name = 'LockIcon'
             LockIcon.Image = 'rbxassetid://132906779122559'
@@ -993,6 +1003,8 @@ function Library:create_ui()
             Description.TextSize = 10
             Description.Parent = Header
             table.insert(Library._elements, {obj = Description, prop = "TextColor3", tKey = "TextDim"})
+
+            applyAilonTextGradient(Description)
 
             local Toggle = Instance.new('Frame')
             Toggle.Name = 'Toggle'
@@ -1024,6 +1036,8 @@ function Library:create_ui()
             CircleCorner.CornerRadius = UDim.new(1, 0)
             CircleCorner.Parent = Circle
 
+            -- Keybind pill — parented to Module (NOT Header) so header click
+            -- doesn't eat the pill click, and ZIndex above header visuals.
             local Keybind = Instance.new('TextButton')
             Keybind.Name = 'Keybind'
             Keybind.AutoButtonColor = false
@@ -1035,7 +1049,7 @@ function Library:create_ui()
             Keybind.BackgroundColor3 = Theme.Control
             Keybind.ZIndex = 8
             Keybind.Active = true
-            Keybind.Parent = Module   -- parent = Module, not Header, so header click doesn't eat pill clicks
+            Keybind.Parent = Module
             table.insert(Library._elements, {obj = Keybind, prop = "BackgroundColor3", tKey = "Control"})
 
             local Icon = Instance.new('ImageLabel')
@@ -1075,6 +1089,7 @@ function Library:create_ui()
             TextLabel.TextYAlignment = Enum.TextYAlignment.Center
             TextLabel.BorderSizePixel = 0
             TextLabel.TextSize = 10
+            TextLabel.ZIndex = 9
             TextLabel.Parent = Keybind
             table.insert(Library._elements, {obj = TextLabel, prop = "TextColor3", tKey = "TextSoft"})
 
@@ -1114,7 +1129,6 @@ function Library:create_ui()
 
             local UIPadding = Instance.new('UIPadding')
             UIPadding.PaddingTop = UDim.new(0, 8)
-            UIPadding.PaddingBottom = UDim.new(0, 8)
             UIPadding.Parent = Options
 
             local UIListLayout_Opts = Instance.new('UIListLayout')
@@ -1123,6 +1137,7 @@ function Library:create_ui()
             UIListLayout_Opts.SortOrder = Enum.SortOrder.LayoutOrder
             UIListLayout_Opts.Parent = Options
 
+            -- Toggle ON: light track + dark knob. OFF: dark track + gray knob.
             function ModuleManager:change_state(state)
                 self._state = state
 
@@ -1229,9 +1244,7 @@ function Library:create_ui()
                 end
             end
 
-            -- ═══════════════════════════════════════════════════════
-            --  Pill click → bind flow. Deferred so header click doesn't eat it.
-            -- ═══════════════════════════════════════════════════════
+            -- Bind flow: deferred so header click doesn't eat the pill click.
             Connections[settings.flag..'_input_began'] = Keybind.MouseButton1Click:Connect(function()
                 task.defer(function()
                     if Library._choosing_keybind then return end
@@ -1287,6 +1300,7 @@ function Library:create_ui()
             end)
 
             Header.MouseButton1Click:Connect(function()
+                -- ignore clicks that land on the pill (pill is in Module coords anyway)
                 ModuleManager:change_state(not ModuleManager._state)
             end)
 
@@ -3368,9 +3382,7 @@ function Library:create_ui()
             end,
         })
 
-        -- ══════════════════════════════════════════════════════
-        --  Keybinds overlay — corner breathing room + footer
-        -- ══════════════════════════════════════════════════════
+        -- Keybinds List overlay
         local KeybindOverlayGui = Instance.new("ScreenGui")
         KeybindOverlayGui.Name = "XinveKeybinds"
         KeybindOverlayGui.ResetOnSpawn = false
@@ -3381,8 +3393,8 @@ function Library:create_ui()
 
         local KeybindFrame = Instance.new("Frame")
         KeybindFrame.Name = "KeybindFrame"
-        KeybindFrame.Size = UDim2.new(0, 220, 0, 46)
-        KeybindFrame.Position = UDim2.new(0, 20, 0.5, -23)
+        KeybindFrame.Size = UDim2.new(0, 210, 0, 38)
+        KeybindFrame.Position = UDim2.new(0, 20, 0.5, -19)
         KeybindFrame.BackgroundColor3 = Color3.fromRGB(14, 14, 18)
         KeybindFrame.BackgroundTransparency = 0.15
         KeybindFrame.BorderSizePixel = 0
@@ -3414,7 +3426,7 @@ function Library:create_ui()
 
         local headerFrame = Instance.new("Frame")
         headerFrame.Name = "Header"
-        headerFrame.Size = UDim2.new(1, 0, 0, 38)
+        headerFrame.Size = UDim2.new(1, 0, 0, 34)
         headerFrame.Position = UDim2.new(0, 0, 0, 0)
         headerFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 26)
         headerFrame.BackgroundTransparency = 0.25
@@ -3437,7 +3449,7 @@ function Library:create_ui()
 
         local keyboardIcon = Instance.new("ImageLabel")
         keyboardIcon.Size = UDim2.new(0, 16, 0, 16)
-        keyboardIcon.Position = UDim2.new(0, 14, 0.5, -8)
+        keyboardIcon.Position = UDim2.new(0, 12, 0.5, -8)
         keyboardIcon.BackgroundTransparency = 1
         keyboardIcon.Image = "rbxassetid://81598136527047"
         keyboardIcon.ImageColor3 = Color3.fromRGB(200, 200, 210)
@@ -3445,8 +3457,8 @@ function Library:create_ui()
         keyboardIcon.Parent = headerFrame
 
         local headerLabel = Instance.new("TextLabel")
-        headerLabel.Size = UDim2.new(1, -44, 1, 0)
-        headerLabel.Position = UDim2.new(0, 36, 0, 0)
+        headerLabel.Size = UDim2.new(1, -40, 1, 0)
+        headerLabel.Position = UDim2.new(0, 34, 0, 0)
         headerLabel.BackgroundTransparency = 1
         headerLabel.Text = "KEYBINDS"
         headerLabel.TextColor3 = Color3.fromRGB(220, 220, 230)
@@ -3498,13 +3510,13 @@ function Library:create_ui()
 
             table.sort(validBinds, function(a, b) return a.title < b.title end)
 
-            local yBase = 46
+            local yBase = 38
             for i, bind in ipairs(validBinds) do
                 if i > 1 then
                     local div = Instance.new("Frame")
                     div.Name = "Divider"
-                    div.Size = UDim2.new(1, -36, 0, 1)
-                    div.Position = UDim2.new(0, 18, 0, yBase)
+                    div.Size = UDim2.new(1, -20, 0, 1)
+                    div.Position = UDim2.new(0, 10, 0, yBase)
                     div.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
                     div.BackgroundTransparency = 0.6
                     div.BorderSizePixel = 0
@@ -3513,8 +3525,8 @@ function Library:create_ui()
 
                 local row = Instance.new("Frame")
                 row.Name = "Row"
-                row.Size = UDim2.new(1, -36, 0, 28)
-                row.Position = UDim2.new(0, 18, 0, yBase + 1)
+                row.Size = UDim2.new(1, -18, 0, 28)
+                row.Position = UDim2.new(0, 9, 0, yBase + 1)
                 row.BackgroundTransparency = 1
                 row.Parent = KeybindFrame
                 row:SetAttribute("Flag", bind.flag)
@@ -3522,7 +3534,7 @@ function Library:create_ui()
                 local labelText = Instance.new("TextLabel")
                 labelText.Name = "Title"
                 labelText.Size = UDim2.new(1, -50, 1, 0)
-                labelText.Position = UDim2.new(0, 0, 0, 0)
+                labelText.Position = UDim2.new(0, 4, 0, 0)
                 labelText.BackgroundTransparency = 1
                 labelText.Text = bind.title
                 labelText.TextColor3 = Color3.fromRGB(170, 170, 180)
@@ -3534,7 +3546,7 @@ function Library:create_ui()
                 local keyPill = Instance.new("Frame")
                 keyPill.Name = "KeyPill"
                 keyPill.Size = UDim2.new(0, 40, 0, 18)
-                keyPill.Position = UDim2.new(1, -10, 0.5, -9)
+                keyPill.Position = UDim2.new(1, -46, 0.5, -9)
                 keyPill.BackgroundColor3 = Color3.fromRGB(28, 28, 36)
                 keyPill.BackgroundTransparency = 0.2
                 keyPill.BorderSizePixel = 0
@@ -3564,7 +3576,7 @@ function Library:create_ui()
 
                 yBase = yBase + 30
             end
-            KeybindFrame.Size = UDim2.new(0, 220, 0, 46 + (#validBinds * 30) + 10)
+            KeybindFrame.Size = UDim2.new(0, 210, 0, 38 + (#validBinds * 30))
             lastBindCount = #validBinds
         end
 
@@ -3668,7 +3680,6 @@ function Library:create_ui()
         getgenv()._Xinve_Cleanup = nil
     end)
 
-    -- Load + Minimize keybind
     Connections['library_visiblity'] = UserInputService.InputBegan:Connect(function(input, process)
         if process then return end
         if Library._choosing_keybind then return end
