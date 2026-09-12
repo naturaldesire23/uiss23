@@ -1,17 +1,16 @@
 -- ═══════════════════════════════════════════════════════════════
 --  Xinve UI — merged lib
---  Base layout: Xinve (Fallen)
---  Borrowed from Ailon: fonts, slider, checkbox, minimize behavior,
---                       keybind overlay, container styling
+--  Base: Fallen (original)
+--  Additions: IceLib overlays (FPS/Ping), Ailon-styled Keybind List
 --  This build:
---   * Header is TextButton (IceLib exact) — pill binds work
---   * Container restyled to Ailon look (45° gradient, softer corners,
---     lighter blue-tinted Group)
+--   * Container uses Theme.Gradient again — Appearance tab works
+--   * Module pill binds exactly like IceLib (Header is TextButton,
+--     Keybind is its TextButton child → child-button-wins-click)
+--   * Gradients harmonized with the Xinve palette (matches the rest)
 --   * URL tab icons via shared resolve_image()
---   * Module title 0.2 transparency, description 0.7 (Ailon)
---   * Brighter input boxes, no giant scroll gap
---   * Toggle ON = Theme.Accent track / Theme.Group knob
---   * IceLib minimize, Interface tab built, Unload button
+--   * Module title 0.2 / description 0.7 transparency (Ailon)
+--   * Brighter inputs, tight section padding, IceLib minimize
+--   * Interface tab built, Unload button
 -- ═══════════════════════════════════════════════════════════════
 
 local UserInputService = cloneref and cloneref(game:GetService('UserInputService')) or game:GetService('UserInputService')
@@ -101,21 +100,22 @@ local Config = setmetatable({
     end
 }, Config)
 
+-- Fallen theme (original) — gradients softened toward the surface palette
 local DefaultTheme = {
     Background   = Color3.fromRGB(0, 0, 0),
-    Group        = Color3.fromRGB(18, 18, 22),
-    GroupStroke  = Color3.fromRGB(58, 58, 66),
-    Control      = Color3.fromRGB(38, 38, 44),
-    ControlHover = Color3.fromRGB(48, 48, 56),
-    Divider      = Color3.fromRGB(40, 40, 46),
+    Group        = Color3.fromRGB(20, 20, 22),
+    GroupStroke  = Color3.fromRGB(48, 48, 54),
+    Control      = Color3.fromRGB(32, 32, 36),
+    ControlHover = Color3.fromRGB(42, 42, 48),
+    Divider      = Color3.fromRGB(38, 38, 42),
     Text         = Color3.fromRGB(238, 238, 242),
-    TextDim      = Color3.fromRGB(150, 150, 162),
-    TextSoft     = Color3.fromRGB(200, 200, 212),
+    TextDim      = Color3.fromRGB(142, 142, 151),
+    TextSoft     = Color3.fromRGB(195, 195, 202),
     Accent       = Color3.fromRGB(224, 224, 224),
     Gradient = ColorSequence.new{
-        ColorSequenceKeypoint.new(0.00, Color3.fromRGB(92, 92, 100)),
-        ColorSequenceKeypoint.new(0.34, Color3.fromRGB(20, 20, 24)),
-        ColorSequenceKeypoint.new(1.00, Color3.fromRGB(8, 8, 10))
+        ColorSequenceKeypoint.new(0.00, Color3.fromRGB(92, 92, 98)),
+        ColorSequenceKeypoint.new(0.34, Color3.fromRGB(20, 20, 22)),
+        ColorSequenceKeypoint.new(1.00, Color3.fromRGB(6, 6, 8))
     },
     TabGradient = ColorSequence.new{
         ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
@@ -158,12 +158,13 @@ local function resolve_image(source, folder)
     return Custom_Asset(path)
 end
 
+-- Module gradient — toned to the same hue family as ContainerGradient
 local function applyAilonModuleGradient(frame)
     local g = Instance.new('UIGradient')
     g.Rotation = 90
     g.Color = ColorSequence.new{
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(32, 32, 38)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(14, 14, 18))
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(30, 30, 34)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(14, 14, 16))
     }
     g.Transparency = NumberSequence.new{
         NumberSequenceKeypoint.new(0, 0.55),
@@ -372,8 +373,8 @@ function Library:create_ui()
     Container.BorderColor3 = Color3.fromRGB(0, 0, 0)
     Container.AnchorPoint = Vector2.new(0.5, 0.5)
     Container.Name = 'Container'
-    Container.BackgroundTransparency = 0.05
-    Container.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    Container.BackgroundTransparency = 0
+    Container.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     Container.Position = UDim2.new(0.5, 0, 0.5, 0)
     Container.Size = UDim2.new(0, 0, 0, 0)
     Container.Active = true
@@ -394,13 +395,13 @@ function Library:create_ui()
     local ShadowOuter = Instance.new('ImageLabel')
     ShadowOuter.Name = 'SoftShadowOuter'
     ShadowOuter.AnchorPoint = Vector2.new(0.5, 0.5)
-    ShadowOuter.Position = UDim2.new(0.5, 0, 0.5, 4)
-    ShadowOuter.Size = UDim2.new(1, 64, 1, 64)
+    ShadowOuter.Position = UDim2.new(0.5, 0, 0.5, 2)
+    ShadowOuter.Size = UDim2.new(1, 58, 1, 58)
     ShadowOuter.BackgroundTransparency = 1
     ShadowOuter.BorderSizePixel = 0
     ShadowOuter.Image = 'rbxassetid://6014261993'
     ShadowOuter.ImageColor3 = Color3.fromRGB(0, 0, 0)
-    ShadowOuter.ImageTransparency = 0.38
+    ShadowOuter.ImageTransparency = 0.43
     ShadowOuter.ScaleType = Enum.ScaleType.Slice
     ShadowOuter.SliceCenter = Rect.new(49, 49, 450, 450)
     ShadowOuter.ZIndex = 0
@@ -409,13 +410,13 @@ function Library:create_ui()
     local ShadowInner = Instance.new('ImageLabel')
     ShadowInner.Name = 'SoftShadowInner'
     ShadowInner.AnchorPoint = Vector2.new(0.5, 0.5)
-    ShadowInner.Position = UDim2.new(0.5, 0, 0.5, 2)
-    ShadowInner.Size = UDim2.new(1, 34, 1, 34)
+    ShadowInner.Position = UDim2.new(0.5, 0, 0.5, 1)
+    ShadowInner.Size = UDim2.new(1, 32, 1, 32)
     ShadowInner.BackgroundTransparency = 1
     ShadowInner.BorderSizePixel = 0
     ShadowInner.Image = 'rbxassetid://6014261993'
     ShadowInner.ImageColor3 = Color3.fromRGB(0, 0, 0)
-    ShadowInner.ImageTransparency = 0.26
+    ShadowInner.ImageTransparency = 0.30
     ShadowInner.ScaleType = Enum.ScaleType.Slice
     ShadowInner.SliceCenter = Rect.new(49, 49, 450, 450)
     ShadowInner.ZIndex = 0
@@ -428,13 +429,10 @@ function Library:create_ui()
         ShadowHolder.Size = Container.Size
     end)
 
-    -- Ailon-style 45° container gradient (60,60,60 → 0,0,0)
+    -- Fallen container gradient (rotated 90, uses Theme.Gradient — Appearance tab rewrites this)
     local ContainerGradient = Instance.new("UIGradient")
-    ContainerGradient.Color = ColorSequence.new{
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(60, 60, 60)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 0, 0))
-    }
-    ContainerGradient.Rotation = 45
+    ContainerGradient.Color = Theme.Gradient
+    ContainerGradient.Rotation = 90
     ContainerGradient.Parent = Container
 
     local Background = Instance.new('ImageLabel')
@@ -452,7 +450,7 @@ function Library:create_ui()
     Background.Parent = Container
 
     local UICorner_bg = Instance.new('UICorner')
-    UICorner_bg.CornerRadius = UDim.new(0, 12)
+    UICorner_bg.CornerRadius = UDim.new(0, 10)
     UICorner_bg.Parent = Background
 
     local Texture = Instance.new('ImageLabel')
@@ -463,8 +461,8 @@ function Library:create_ui()
     Texture.BorderSizePixel = 0
     Texture.BorderColor3 = Color3.fromRGB(0, 0, 0)
     Texture.Image = 'rbxassetid://9968344227'
-    Texture.ImageColor3 = Color3.fromRGB(255, 255, 255)
-    Texture.ImageTransparency = 0.94
+    Texture.ImageColor3 = Color3.fromRGB(0, 0, 0)
+    Texture.ImageTransparency = 0.88
     Texture.ScaleType = Enum.ScaleType.Tile
     Texture.TileSize = UDim2.new(0, 128, 0, 128)
     Texture.ZIndex = 0
@@ -483,13 +481,12 @@ function Library:create_ui()
     SideGradient.Parent = SideBar
 
     local UICorner = Instance.new('UICorner')
-    UICorner.CornerRadius = UDim.new(0, 12)
+    UICorner.CornerRadius = UDim.new(0, 10)
     UICorner.Parent = Container
 
     local UIStroke = Instance.new('UIStroke')
-    UIStroke.Color = Color3.fromRGB(60, 60, 60)
-    UIStroke.Transparency = 0.5
-    UIStroke.Thickness = 1
+    UIStroke.Color = Theme.GroupStroke
+    UIStroke.Transparency = 0.58
     UIStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
     UIStroke.Parent = Container
 
@@ -654,12 +651,9 @@ function Library:create_ui()
         ShadowHolder.Visible = state
         if state then
             ContainerGradient.Enabled = true
-            ContainerGradient.Color = ColorSequence.new{
-                ColorSequenceKeypoint.new(0, Color3.fromRGB(60, 60, 60)),
-                ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 0, 0))
-            }
-            ContainerGradient.Rotation = 45
-            Container.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+            ContainerGradient.Color = Theme.Gradient
+            ContainerGradient.Rotation = 90
+            Container.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
             Logo.Position = UDim2.new(0, 14, 0, 26)
             ClientName.Position = UDim2.new(0, 43, 0, 26)
 
@@ -669,11 +663,11 @@ function Library:create_ui()
         else
             ContainerGradient.Enabled = true
             ContainerGradient.Color = ColorSequence.new{
-                ColorSequenceKeypoint.new(0.00, Color3.fromRGB(60, 60, 60)),
+                ColorSequenceKeypoint.new(0.00, Color3.fromRGB(72, 72, 78)),
                 ColorSequenceKeypoint.new(1.00, Color3.fromRGB(0, 0, 0))
             }
-            ContainerGradient.Rotation = 45
-            Container.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+            ContainerGradient.Rotation = 90
+            Container.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
             Logo.Position = UDim2.new(0, 10, 0, 26)
             ClientName.Position = UDim2.new(0, 39, 0, 26)
 
@@ -807,7 +801,7 @@ function Library:create_ui()
         table.insert(Library._elements, {obj = Tab, prop = "BackgroundColor3", tKey = "Group"})
 
         local UICorner = Instance.new('UICorner')
-        UICorner.CornerRadius = UDim.new(0, 8)
+        UICorner.CornerRadius = UDim.new(0, 5)
         UICorner.Parent = Tab
 
         local TextLabel = Instance.new('TextLabel')
@@ -932,7 +926,7 @@ function Library:create_ui()
             local Module = Instance.new('Frame')
             Module.ClipsDescendants = true
             Module.BorderColor3 = Color3.fromRGB(0, 0, 0)
-            Module.BackgroundTransparency = 0.15
+            Module.BackgroundTransparency = 0.1
             Module.Position = UDim2.new(0.004115226212888956, 0, 0, 0)
             Module.Name = 'Module'
             Module.Size = UDim2.new(0, 241, 0, 93)
@@ -949,18 +943,18 @@ function Library:create_ui()
             UIListLayout_Mod.Parent = Module
 
             local UICorner = Instance.new('UICorner')
-            UICorner.CornerRadius = UDim.new(0, 10)
+            UICorner.CornerRadius = UDim.new(0, 9)
             UICorner.Parent = Module
 
             local UIStroke = Instance.new('UIStroke')
             UIStroke.Color = Theme.GroupStroke
-            UIStroke.Transparency = 0.7
+            UIStroke.Transparency = 0.72
             UIStroke.Thickness = 1
             UIStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
             UIStroke.Parent = Module
             table.insert(Library._elements, {obj = UIStroke, prop = "Color", tKey = "GroupStroke"})
 
-            -- Header is a TextButton (IceLib exact) — pill binds work via child-button-wins
+            -- Header is TextButton (IceLib exact) — pill is its TextButton child
             local Header = Instance.new('TextButton')
             Header.FontFace = FONT_MAIN
             Header.TextColor3 = Color3.fromRGB(0, 0, 0)
@@ -1260,9 +1254,14 @@ function Library:create_ui()
                 end
             end
 
-            -- IceLib-exact bind flow — pill click starts listener
+            -- ═══════════════════════════════════════════════════════
+            --  IceLib bind flow — verbatim.
+            --  Header is TextButton, Keybind is its child TextButton;
+            --  child button wins the click, so pill fires cleanly.
+            -- ═══════════════════════════════════════════════════════
             Connections[settings.flag..'_input_began'] = Keybind.MouseButton1Click:Connect(function()
                 if Library._choosing_keybind then return end
+
                 Library._choosing_keybind = true
                 TextLabel.Text = '...'
                 Keybind.BackgroundColor3 = Theme.ControlHover
@@ -1283,6 +1282,7 @@ function Library:create_ui()
 
                 Connections['keybind_choose_start'] = UserInputService.InputBegan:Connect(function(input, process)
                     if process then return end
+
                     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                         local mousePos = UserInputService:GetMouseLocation()
                         local framePos = Keybind.AbsolutePosition
@@ -1292,10 +1292,11 @@ function Library:create_ui()
                             return
                         end
                     end
+
                     if input.KeyCode == Enum.KeyCode.Unknown then return end
+
                     if input.KeyCode == Enum.KeyCode.Backspace then
                         Library._config._keybinds[settings.flag] = nil
-                        Library._keybind_list[settings.flag] = nil
                         if Library._keybind_registry[settings.flag] then
                             Library._keybind_registry[settings.flag](nil)
                         end
@@ -1303,11 +1304,12 @@ function Library:create_ui()
                         Config:save(game.GameId, Library._config)
                         return
                     end
+
                     Library._config._keybinds[settings.flag] = tostring(input.KeyCode)
-                    Library._keybind_list[settings.flag] = settings.title or "Module"
                     if Library._keybind_registry[settings.flag] then
                         Library._keybind_registry[settings.flag](tostring(input.KeyCode))
                     end
+
                     cancel_choose()
                     Config:save(game.GameId, Library._config)
                 end)
