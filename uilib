@@ -1,18 +1,18 @@
 -- ═══════════════════════════════════════════════════════════════
---  Xinve UI — merged lib
+--  Astral UI — merged lib
 --  Base: Fallen
---  Overlays: IceLib (FPS/Ping) + Ailon-style Keybind List
+--  Overlays: IceLib (FPS/Ping) + purple-dark Keybind List
 --
---  This build:
---   * Library.new({ name, logo, namespace }) — nothing hardcoded
---   * Library.SetBackgroundPresets({ ['Label'] = url, ... }) — example-defined
---   * Keybind list rebuilds when key text changes (not just count)
---   * Keybind list styled purple-dark, half-transparent
---   * Module keybind_row gated on parent module state
---   * Sub-function bind gated on parent module state
+--  Fixes in this build:
+--   * Toggles recolour in real time from Appearance tab (no re-toggle needed)
 --   * Toggle colour exposed as Appearance target ("Toggle")
---   * Toggles default to soft gray, not stark white, on first run
---   * URL icons for tabs, modules, background, logo
+--   * Input boxes restyled — half-dark transparent w/ soft purple tint
+--   * Keybind list rebuilds only the affected row on rebind (no full
+--     highlight flash across every row)
+--   * Library.new({ name, logo, namespace })
+--   * Library.SetBackgroundPresets({...})
+--   * Keybind list purple-dark half-transparent
+--   * Sub-bind gated on module state
 -- ═══════════════════════════════════════════════════════════════
 
 local UserInputService = cloneref and cloneref(game:GetService('UserInputService')) or game:GetService('UserInputService')
@@ -30,7 +30,6 @@ local Workspace        = cloneref and cloneref(game:GetService('Workspace'))    
 local mouse = Players.LocalPlayer:GetMouse()
 local LocalPlayer = Players.LocalPlayer
 
--- ── Namespace (can be overridden via Library.new({ namespace = ... }))
 local NAMESPACE = "Xinve"
 
 local function ensureFolders()
@@ -119,7 +118,8 @@ local DefaultTheme = {
     TextDim      = Color3.fromRGB(142, 142, 151),
     TextSoft     = Color3.fromRGB(195, 195, 202),
     Accent       = Color3.fromRGB(224, 224, 224),
-    Toggle       = Color3.fromRGB(150, 150, 158),   -- ← toggle track when ON
+    Toggle       = Color3.fromRGB(150, 150, 158),
+    InputBg      = Color3.fromRGB(26, 22, 40),
     Gradient = ColorSequence.new{
         ColorSequenceKeypoint.new(0.00, Color3.fromRGB(92, 92, 98)),
         ColorSequenceKeypoint.new(0.34, Color3.fromRGB(20, 20, 22)),
@@ -181,7 +181,7 @@ local function applyAilonModuleGradient(frame)
 end
 
 local Library = {
-    _config = nil,   -- populated lazily on Library.new()
+    _config = nil,
     _choosing_keybind = false,
     _device = nil,
     _ui_open = true,
@@ -197,13 +197,16 @@ local Library = {
     _notif_opacity = 0.0,
     _keybind_list = {},
 
-    -- Options set by Library.new({...})
     _clientName = "Xinve",
     _clientLogo = "rbxassetid://119051552929078",
 
-    -- Presets set by Library.SetBackgroundPresets({...})
     _backgroundPresets = {},
-    _presetOptions = { 'None' }
+    _presetOptions = { 'None' },
+
+    -- Live recolour registries
+    _toggleLive = {},    -- list of {toggle=Frame, knob=Frame, module=ModuleManager}
+    _inputLive  = {},    -- list of {frame=Frame, stroke=UIStroke}
+    _moduleLive = {},    -- list of {module=Frame, toggle=Frame, knob=Frame}
 }
 Library.__index = Library
 Library.Connections = Connections
@@ -1091,6 +1094,9 @@ function Library:create_ui()
             CircleCorner.CornerRadius = UDim.new(1, 0)
             CircleCorner.Parent = Circle
 
+            -- Register for live toggle recolour
+            table.insert(Library._moduleLive, { toggle = Toggle, knob = Circle, module = ModuleManager })
+
             local Icon = Instance.new('ImageLabel')
             Icon.Name = 'Icon'
             Icon.Image = resolve_image(settings.icon or 'rbxassetid://79095934438045', NAMESPACE..'/Icons')
@@ -1187,6 +1193,18 @@ function Library:create_ui()
             UIListLayout_Opts.HorizontalAlignment = Enum.HorizontalAlignment.Center
             UIListLayout_Opts.SortOrder = Enum.SortOrder.LayoutOrder
             UIListLayout_Opts.Parent = Options
+
+            -- Apply Theme.Toggle live when it changes
+            local function applyToggleColour()
+                if ModuleManager._state then
+                    Toggle.BackgroundColor3 = Theme.Toggle
+                    Circle.BackgroundColor3 = Theme.Group
+                else
+                    Toggle.BackgroundColor3 = Theme.Control
+                    Circle.BackgroundColor3 = Theme.TextDim
+                end
+            end
+            ModuleManager._applyToggleColour = applyToggleColour
 
             function ModuleManager:change_state(state)
                 self._state = state
@@ -1443,7 +1461,7 @@ function Library:create_ui()
                 Fill.Name = "Fill"
                 Fill.Size = UDim2.fromOffset(0, 0)
                 Fill.BorderSizePixel = 0
-                Fill.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+                Fill.BackgroundColor3 = Theme.Toggle
                 Fill.Parent = Box
                 table.insert(Library._elements, {obj = Fill, prop = "BackgroundColor3", tKey = "Toggle"})
 
@@ -1458,14 +1476,16 @@ function Library:create_ui()
                             BackgroundTransparency = 0.7
                         }):Play()
                         TweenService:Create(Fill, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-                            Size = UDim2.fromOffset(9, 9)
+                            Size = UDim2.fromOffset(9, 9),
+                            BackgroundColor3 = Theme.Toggle
                         }):Play()
                     else
                         TweenService:Create(Box, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
                             BackgroundTransparency = 0.9
                         }):Play()
                         TweenService:Create(Fill, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
-                            Size = UDim2.fromOffset(0, 0)
+                            Size = UDim2.fromOffset(0, 0),
+                            BackgroundColor3 = Theme.Toggle
                         }):Play()
                     end
                     Library._config._flags[s.flag] = self._state
@@ -1700,7 +1720,6 @@ function Library:create_ui()
                     end)
                 end)
 
-                -- Bind fires ONLY when its parent module is ON
                 Connections[s.flag..'_keypress'] = UserInputService.InputBegan:Connect(function(input, process)
                     if process then return end
                     if not ModuleManager._state then return end
@@ -1964,7 +1983,8 @@ function Library:create_ui()
                 Box.AnchorPoint = Vector2.new(0, 1)
                 Box.Position = UDim2.new(0, 0, 1, 0)
                 Box.Size = UDim2.fromOffset(207, 24)
-                Box.BackgroundColor3 = Theme.Control
+                Box.BackgroundColor3 = Theme.InputBg
+                Box.BackgroundTransparency = 0.25
                 Box.BorderSizePixel = 0
                 Box.FontFace = FONT_MAIN
                 Box.TextColor3 = Theme.Text
@@ -1973,7 +1993,7 @@ function Library:create_ui()
                 Box.PlaceholderColor3 = Theme.TextDim
                 Box.ClearTextOnFocus = false
                 Box.Parent = Holder
-                table.insert(Library._elements, {obj = Box, prop = "BackgroundColor3", tKey = "Control"})
+                table.insert(Library._elements, {obj = Box, prop = "BackgroundColor3", tKey = "InputBg"})
                 table.insert(Library._elements, {obj = Box, prop = "TextColor3", tKey = "Text"})
                 table.insert(Library._elements, {obj = Box, prop = "PlaceholderColor3", tKey = "TextDim"})
 
@@ -1984,12 +2004,12 @@ function Library:create_ui()
                 end
 
                 local BoxCorner = Instance.new('UICorner')
-                BoxCorner.CornerRadius = UDim.new(0, 4)
+                BoxCorner.CornerRadius = UDim.new(0, 6)
                 BoxCorner.Parent = Box
 
                 local BoxStroke = Instance.new('UIStroke')
                 BoxStroke.Color = Theme.GroupStroke
-                BoxStroke.Transparency = 0.72
+                BoxStroke.Transparency = 0.62
                 BoxStroke.Thickness = 1
                 BoxStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
                 BoxStroke.Parent = Box
@@ -2078,9 +2098,9 @@ function Library:create_ui()
                 Box.Name = 'Box'
                 Box.Size = UDim2.new(0, 210, 0, 28)
                 Box.BorderSizePixel = 0
-                Box.BackgroundColor3 = Theme.Control
+                Box.BackgroundColor3 = Theme.InputBg
                 Box.Parent = TextLabel
-                table.insert(Library._elements, {obj = Box, prop = "BackgroundColor3", tKey = "Control"})
+                table.insert(Library._elements, {obj = Box, prop = "BackgroundColor3", tKey = "InputBg"})
 
                 local UICorner = Instance.new('UICorner')
                 UICorner.CornerRadius = UDim.new(0, 5)
@@ -2442,6 +2462,17 @@ function Library:create_ui()
         elseif key == "GroupStroke" then
             UIStroke.Color = color
         end
+
+        -- Live toggle recolour: reflect Theme.Toggle instantly
+        if key == "Toggle" then
+            for _, entry in ipairs(Library._moduleLive) do
+                if entry.module._state then
+                    if entry.toggle then entry.toggle.BackgroundColor3 = color end
+                    if entry.knob then entry.knob.BackgroundColor3 = Theme.Group end
+                end
+            end
+        end
+
         Library._config._flags['Theme_'..key] = self:rgbToHex(color)
         Config:save(game.GameId, Library._config)
     end
@@ -2689,7 +2720,7 @@ function Library:create_ui()
         })
 
         local Color_Module_Frame = find_module_frame('Appearance')
-        local Color_Targets = { 'Background', 'Group', 'Control', 'Accent', 'Toggle', 'Text', 'TextDim' }
+        local Color_Targets = { 'Background', 'Group', 'Control', 'Accent', 'Toggle', 'InputBg', 'Text', 'TextDim' }
         local Color_Swatches = {}
         local Selected_Color_Target = 'Background'
         local Pointer_Offset = Vector2.zero
@@ -3100,7 +3131,8 @@ function Library:create_ui()
             Input.AnchorPoint = Vector2.new(0, 0.5)
             Input.Position = UDim2.new(0, 0, 0.5, 0)
             Input.Size = UDim2.fromOffset(207, 24)
-            Input.BackgroundColor3 = Theme.Control
+            Input.BackgroundColor3 = Theme.InputBg
+            Input.BackgroundTransparency = 0.25
             Input.BorderSizePixel = 0
             Input.FontFace = FONT_MAIN
             Input.TextColor3 = Theme.Text
@@ -3111,19 +3143,19 @@ function Library:create_ui()
             Input.ClipsDescendants = true
             Input.Text = Background_Image_Id
             Input.Parent = Row
-            table.insert(self._elements, {obj = Input, prop = "BackgroundColor3", tKey = "Control"})
+            table.insert(self._elements, {obj = Input, prop = "BackgroundColor3", tKey = "InputBg"})
             table.insert(self._elements, {obj = Input, prop = "TextColor3", tKey = "Text"})
             table.insert(self._elements, {obj = Input, prop = "PlaceholderColor3", tKey = "TextDim"})
 
             Asset_Input = Input
 
             local InputCorner = Instance.new('UICorner')
-            InputCorner.CornerRadius = UDim.new(0, 4)
+            InputCorner.CornerRadius = UDim.new(0, 6)
             InputCorner.Parent = Input
 
             local InputStroke = Instance.new('UIStroke')
             InputStroke.Color = Theme.GroupStroke
-            InputStroke.Transparency = 0.72
+            InputStroke.Transparency = 0.62
             InputStroke.Thickness = 1
             InputStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
             InputStroke.Parent = Input
@@ -3422,7 +3454,11 @@ function Library:create_ui()
             end,
         })
 
-        -- Keybinds List (purple-dark half-transparent)
+        -- ══════════════════════════════════════════════════════
+        --  Keybinds List — purple-dark half-transparent
+        --  Rebuilds only when the signature changes, and only the
+        --  affected row changes text (no flash on every row).
+        -- ══════════════════════════════════════════════════════
         local KeybindOverlayGui = Instance.new("ScreenGui")
         KeybindOverlayGui.Name = Library._clientName.."Keybinds"
         KeybindOverlayGui.ResetOnSpawn = false
@@ -3639,8 +3675,10 @@ function Library:create_ui()
                 keybindUpdateTimer = 0
                 local sig = computeBindSignature()
                 if sig ~= lastBindSignature then
+                    -- Signature changed → rebuild (row counts/keys differ). No per-row flash since it's a fresh layout.
                     RefreshKeybindOverlay()
                 else
+                    -- Signature unchanged → only nudge the highlight colour per row (no tween, direct set).
                     for _, row in ipairs(KeybindFrame:GetChildren()) do
                         if row.Name == "Row" then
                             local flag = row:GetAttribute("Flag")
@@ -3669,7 +3707,7 @@ function Library:create_ui()
         end
     end
 
-    -- Unload button
+    -- Unload
     local UnloadBtn = Instance.new('TextButton')
     UnloadBtn.Name = 'UnloadBtn'
     UnloadBtn.Text = 'Unload'
