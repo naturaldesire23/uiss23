@@ -1,14 +1,15 @@
 -- ═══════════════════════════════════════════════════════════════
 --  Xinve UI — merged lib
---  Base: Fallen (original)
---  Additions: IceLib overlays (FPS/Ping), Ailon-styled Keybind List
+--  Base: Fallen (original layout)
+--  Overlays: IceLib (FPS/Ping) + Ailon-styled Keybind List
 --  This build:
---   * Container uses Theme.Gradient again — Appearance tab works
---   * Module pill binds exactly like IceLib (Header is TextButton,
---     Keybind is its TextButton child → child-button-wins-click)
---   * Gradients harmonized with the Xinve palette (matches the rest)
---   * URL tab icons via shared resolve_image()
---   * Module title 0.2 / description 0.7 transparency (Ailon)
+--   * Module-level "..." binds via Header TextButton child (IceLib)
+--   * Sub-function "..." (checkbox) now binds on LEFT CLICK and is
+--     gated on its parent module state — won't fire while module off
+--   * URL tab icons via resolve_image()
+--   * Container gradient uses Theme.Gradient — Appearance tab works
+--   * Harmonized gradient palette (no teal/blue mismatch)
+--   * Ailon font transparency on module title/desc
 --   * Brighter inputs, tight section padding, IceLib minimize
 --   * Interface tab built, Unload button
 -- ═══════════════════════════════════════════════════════════════
@@ -100,7 +101,6 @@ local Config = setmetatable({
     end
 }, Config)
 
--- Fallen theme (original) — gradients softened toward the surface palette
 local DefaultTheme = {
     Background   = Color3.fromRGB(0, 0, 0),
     Group        = Color3.fromRGB(20, 20, 22),
@@ -133,7 +133,6 @@ local FONT_MAIN    = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.F
 local FONT_REGULAR = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.Regular,  Enum.FontStyle.Normal)
 local FONT_BOLD    = Font.new('rbxasset://fonts/families/GothamSSm.json', Enum.FontWeight.Bold,     Enum.FontStyle.Normal)
 
--- Shared image resolver (assetid / bare ID / local path / https URL)
 local function resolve_image(source, folder)
     folder = folder or 'Xinve/Icons'
     if source == nil or source == '' then return '' end
@@ -158,7 +157,6 @@ local function resolve_image(source, folder)
     return Custom_Asset(path)
 end
 
--- Module gradient — toned to the same hue family as ContainerGradient
 local function applyAilonModuleGradient(frame)
     local g = Instance.new('UIGradient')
     g.Rotation = 90
@@ -200,7 +198,6 @@ function Library.new()
     return self
 end
 
--- Notifications
 local NotificationHost = Instance.new("ScreenGui")
 NotificationHost.Name = "XinveNotifications"
 NotificationHost.ResetOnSpawn = false
@@ -315,7 +312,6 @@ function Library.SendNotification(settings)
     end)
 end
 
--- Helpers
 function Library:get_screen_scale()
     local viewport_size_x = Workspace.CurrentCamera.ViewportSize.X
     self._ui_scale = viewport_size_x / 1400
@@ -429,7 +425,6 @@ function Library:create_ui()
         ShadowHolder.Size = Container.Size
     end)
 
-    -- Fallen container gradient (rotated 90, uses Theme.Gradient — Appearance tab rewrites this)
     local ContainerGradient = Instance.new("UIGradient")
     ContainerGradient.Color = Theme.Gradient
     ContainerGradient.Rotation = 90
@@ -954,7 +949,6 @@ function Library:create_ui()
             UIStroke.Parent = Module
             table.insert(Library._elements, {obj = UIStroke, prop = "Color", tKey = "GroupStroke"})
 
-            -- Header is TextButton (IceLib exact) — pill is its TextButton child
             local Header = Instance.new('TextButton')
             Header.FontFace = FONT_MAIN
             Header.TextColor3 = Color3.fromRGB(0, 0, 0)
@@ -1088,7 +1082,6 @@ function Library:create_ui()
             Divider2.Parent = Header
             table.insert(Library._elements, {obj = Divider2, prop = "BackgroundColor3", tKey = "Divider"})
 
-            -- Keybind pill — child of Header, exactly like IceLib
             local Keybind = Instance.new('TextButton')
             Keybind.Name = 'Keybind'
             Keybind.AutoButtonColor = false
@@ -1254,14 +1247,8 @@ function Library:create_ui()
                 end
             end
 
-            -- ═══════════════════════════════════════════════════════
-            --  IceLib bind flow — verbatim.
-            --  Header is TextButton, Keybind is its child TextButton;
-            --  child button wins the click, so pill fires cleanly.
-            -- ═══════════════════════════════════════════════════════
             Connections[settings.flag..'_input_began'] = Keybind.MouseButton1Click:Connect(function()
                 if Library._choosing_keybind then return end
-
                 Library._choosing_keybind = true
                 TextLabel.Text = '...'
                 Keybind.BackgroundColor3 = Theme.ControlHover
@@ -1282,7 +1269,6 @@ function Library:create_ui()
 
                 Connections['keybind_choose_start'] = UserInputService.InputBegan:Connect(function(input, process)
                     if process then return end
-
                     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                         local mousePos = UserInputService:GetMouseLocation()
                         local framePos = Keybind.AbsolutePosition
@@ -1292,9 +1278,7 @@ function Library:create_ui()
                             return
                         end
                     end
-
                     if input.KeyCode == Enum.KeyCode.Unknown then return end
-
                     if input.KeyCode == Enum.KeyCode.Backspace then
                         Library._config._keybinds[settings.flag] = nil
                         if Library._keybind_registry[settings.flag] then
@@ -1304,12 +1288,10 @@ function Library:create_ui()
                         Config:save(game.GameId, Library._config)
                         return
                     end
-
                     Library._config._keybinds[settings.flag] = tostring(input.KeyCode)
                     if Library._keybind_registry[settings.flag] then
                         Library._keybind_registry[settings.flag](tostring(input.KeyCode))
                     end
-
                     cancel_choose()
                     Config:save(game.GameId, Library._config)
                 end)
@@ -1319,6 +1301,9 @@ function Library:create_ui()
                 ModuleManager:change_state(not ModuleManager._state)
             end)
 
+            -- ═══════════════════════════════════════════════════════
+            --  Checkbox (with real child TextButton pill for binding)
+            -- ═══════════════════════════════════════════════════════
             function ModuleManager:create_checkbox(s)
                 LayoutOrderModule = LayoutOrderModule + 1
                 local CheckboxManager = { _state = false }
@@ -1361,13 +1346,16 @@ function Library:create_ui()
                 TitleLabel.Parent = Checkbox
                 table.insert(Library._elements, {obj = TitleLabel, prop = "TextColor3", tKey = "Text"})
 
-                local KeybindBox = Instance.new("Frame")
+                -- Pill is a TextButton now (child of Checkbox TextButton)
+                local KeybindBox = Instance.new("TextButton")
                 KeybindBox.Name = "KeybindBox"
                 KeybindBox.Size = UDim2.fromOffset(14, 14)
                 KeybindBox.Position = UDim2.new(1, -35, 0.5, 0)
                 KeybindBox.AnchorPoint = Vector2.new(0, 0.5)
                 KeybindBox.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
                 KeybindBox.BorderSizePixel = 0
+                KeybindBox.AutoButtonColor = false
+                KeybindBox.Text = ''
                 KeybindBox.Parent = Checkbox
                 table.insert(Library._elements, {obj = KeybindBox, prop = "BackgroundColor3", tKey = "Control"})
 
@@ -1454,43 +1442,60 @@ function Library:create_ui()
                     CheckboxManager:change_state(not CheckboxManager._state)
                 end)
 
-                Checkbox.InputBegan:Connect(function(input, gameProcessed)
-                    if gameProcessed then return end
-                    if input.UserInputType ~= Enum.UserInputType.MouseButton3 then return end
+                -- Left-click on the pill to bind
+                KeybindBox.MouseButton1Click:Connect(function()
                     if Library._choosing_keybind then return end
-
                     Library._choosing_keybind = true
-                    local chooseConnection
-                    chooseConnection = UserInputService.InputBegan:Connect(function(keyInput, processed)
+                    KeybindLabel.Text = "..."
+                    KeybindBox.BackgroundColor3 = Theme.ControlHover
+
+                    local function cancel_choose()
+                        Library._choosing_keybind = false
+                        KeybindBox.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+                        if Library._config._keybinds[s.flag] then
+                            KeybindLabel.Text = string.gsub(tostring(Library._config._keybinds[s.flag]), "Enum.KeyCode.", "")
+                        else
+                            KeybindLabel.Text = "..."
+                        end
+                        if Connections['checkbox_keybind_choose'] then
+                            Connections['checkbox_keybind_choose']:Disconnect()
+                            Connections['checkbox_keybind_choose'] = nil
+                        end
+                    end
+
+                    Connections['checkbox_keybind_choose'] = UserInputService.InputBegan:Connect(function(keyInput, processed)
                         if processed then return end
-                        if keyInput.UserInputType ~= Enum.UserInputType.Keyboard then return end
                         if keyInput.KeyCode == Enum.KeyCode.Unknown then return end
 
                         if keyInput.KeyCode == Enum.KeyCode.Backspace then
                             Library._config._keybinds[s.flag] = nil
                             Library._keybind_list[s.flag] = nil
                             Config:save(game.GameId, Library._config)
-                            KeybindLabel.Text = "..."
                             if Connections[s.flag .. "_keybind"] then
                                 Connections[s.flag .. "_keybind"]:Disconnect()
                                 Connections[s.flag .. "_keybind"] = nil
                             end
-                            chooseConnection:Disconnect()
-                            Library._choosing_keybind = false
+                            if Library._keybind_registry[s.flag] then
+                                Library._keybind_registry[s.flag](nil)
+                            end
+                            cancel_choose()
                             return
                         end
 
-                        chooseConnection:Disconnect()
                         Library._config._keybinds[s.flag] = tostring(keyInput.KeyCode)
                         Library._keybind_list[s.flag] = s.title or "Toggle"
                         Config:save(game.GameId, Library._config)
-                        Library._choosing_keybind = false
-                        KeybindLabel.Text = string.gsub(tostring(Library._config._keybinds[s.flag]), "Enum.KeyCode.", "")
+                        if Library._keybind_registry[s.flag] then
+                            Library._keybind_registry[s.flag](tostring(keyInput.KeyCode))
+                        end
+                        cancel_choose()
                     end)
                 end)
 
+                -- Sub-bind fires ONLY when the parent module is ON
                 Connections[s.flag .. "_keypress"] = UserInputService.InputBegan:Connect(function(input, gameProcessed)
                     if gameProcessed then return end
+                    if not ModuleManager._state then return end
                     if input.UserInputType == Enum.UserInputType.Keyboard then
                         local storedKey = Library._config._keybinds[s.flag]
                         if storedKey and tostring(input.KeyCode) == storedKey then
@@ -3613,7 +3618,6 @@ function Library:create_ui()
         end
     end
 
-    -- Unload button
     local UnloadBtn = Instance.new('TextButton')
     UnloadBtn.Name = 'UnloadBtn'
     UnloadBtn.Text = 'Unload'
